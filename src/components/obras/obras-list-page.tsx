@@ -84,7 +84,7 @@ export function ObrasListPage() {
 
       {/* Header Fixo */}
       <header className="sticky top-0 z-30 bg-black/95 backdrop-blur-md border-b border-zinc-800 p-4 shadow-lg">
-        <div className="max-w-5xl mx-auto w-full space-y-3">
+        <div className="max-w-3xl mx-auto w-full space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-10 h-10 rounded-xl bg-[#ffc61e] flex items-center justify-center border border-[#ffc61e]/40 shadow-sm">
@@ -135,10 +135,10 @@ export function ObrasListPage() {
       </header>
 
       {/* Conteúdo Principal */}
-      <main className="flex-1 p-4 max-w-5xl mx-auto w-full space-y-3">
+      <main className="flex-1 p-4 max-w-3xl mx-auto w-full space-y-3">
         {!mounted || isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div className="space-y-3 pt-2">
+            {[1, 2, 3, 4].map((i) => (
               <div key={i} className="h-32 rounded-xl bg-zinc-900/60 border border-zinc-800/60 animate-pulse p-4 space-y-3">
                 <div className="flex justify-between">
                   <div className="h-4 w-24 bg-zinc-800 rounded"></div>
@@ -156,7 +156,7 @@ export function ObrasListPage() {
                 {obras.length} {obras.length === 1 ? 'obra encontrada' : 'obras encontradas'}
               </span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="space-y-3">
               {obras.map((obra) => (
                 <ObraCard key={obra.id_obra} obra={obra} />
               ))}

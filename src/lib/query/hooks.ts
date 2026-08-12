@@ -5,25 +5,38 @@ import { Obra } from '@/lib/supabase/types';
 export interface UseObrasOptions {
   searchQuery?: string;
   statusFilter?: string; // Ex: "Vistoria Solicitada" para App ou "Documentação em Análise" para Web
+  allowedStatuses?: string[]; // Lista branca de status permitidos (ex: ['Em Análise Técnica', 'Documentação em Análise'])
+  excludeStatus?: string; // Excluir explicitamente um status (ex: 'Vistoria Solicitada')
+  refetchInterval?: number | false; // Intervalo de auto-refetch reativo
 }
 
 export function useObras(options: UseObrasOptions | string = '') {
   const searchQuery = typeof options === 'string' ? options : options.searchQuery || '';
   const statusFilter = typeof options === 'string' ? '' : options.statusFilter || '';
+  const allowedStatuses = typeof options === 'string' ? undefined : options.allowedStatuses;
+  const excludeStatus = typeof options === 'string' ? undefined : options.excludeStatus;
+  const refetchInterval = typeof options === 'string' ? 10000 : options.refetchInterval ?? 10000;
 
   const supabase = createClient();
 
   return useQuery({
-    queryKey: ['obras', searchQuery, statusFilter],
+    queryKey: ['obras', searchQuery, statusFilter, allowedStatuses, excludeStatus],
     queryFn: async () => {
       let query = supabase.from('obras').select('*').order('created_at', { ascending: false });
 
-      // Filtro de Single Source of Truth por Status (ex: "Vistoria Solicitada")
-      if (statusFilter.trim()) {
+      // 1. Filtro de Lista Branca (Allow List)
+      if (allowedStatuses && allowedStatuses.length > 0) {
+        query = query.in('status', allowedStatuses);
+      } else if (statusFilter.trim()) {
         query = query.ilike('status', `%${statusFilter.trim()}%`);
       }
 
-      // Filtro de Busca rápida
+      // 2. Filtro de Exclusão Estrita (Negação)
+      if (excludeStatus?.trim()) {
+        query = query.neq('status', excludeStatus.trim());
+      }
+
+      // 3. Filtro de Busca Rápida por cliente, cidade ou ID
       if (searchQuery.trim()) {
         const q = searchQuery.trim().toLowerCase();
         const numQ = Number(q);
@@ -40,6 +53,9 @@ export function useObras(options: UseObrasOptions | string = '') {
       }
       return (data as Obra[]) || [];
     },
+    // Revalidação em segundo plano a cada 10s + no foco da janela para reatividade em tempo real
+    refetchInterval,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -63,6 +79,7 @@ export function useObra(idObra: number | string) {
       return (data as Obra) || null;
     },
     enabled: !isNaN(numId) && numId > 0,
+    refetchOnWindowFocus: true,
   });
 }
 

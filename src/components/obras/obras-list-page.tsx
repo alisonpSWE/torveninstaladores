@@ -6,11 +6,12 @@ import { ObraCard } from './obra-card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Search, RefreshCw, Plus, Sun, AlertCircle, CheckCircle2, Loader2, Layers } from 'lucide-react';
+import { Search, RefreshCw, Plus, Sun, AlertCircle, CheckCircle2, Loader2, Layers, Filter } from 'lucide-react';
 
 export function ObrasListPage() {
   const [mounted, setMounted] = useState(false);
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'analise' | 'todas'>('analise');
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [idsToImport, setIdsToImport] = useState('');
   const [feedback, setFeedback] = useState<{
@@ -23,7 +24,25 @@ export function ObrasListPage() {
     setMounted(true);
   }, []);
 
-  const { data: obras, isLoading, isFetching, refetch } = useObras({ searchQuery: search });
+  // Regra de Negócio Estrita:
+  // Modo 'analise': Exibe obras em 'Em Análise Técnica', 'Documentação em Análise', etc., e EXCLUI 'Vistoria Solicitada'
+  // Modo 'todas': Exibe todas as obras
+  const { data: obras, isLoading, isFetching, refetch } = useObras(
+    activeTab === 'analise'
+      ? {
+          searchQuery: search,
+          allowedStatuses: [
+            'Em Análise Técnica',
+            'Documentação em Análise',
+            'Instalação liberada',
+            'Em andamento',
+            'Aguardando material',
+          ],
+          excludeStatus: 'Vistoria Solicitada',
+        }
+      : { searchQuery: search }
+  );
+
   const importMutation = useImportObra();
 
   const handleBatchImport = async (e: React.FormEvent) => {
@@ -103,6 +122,31 @@ export function ObrasListPage() {
           </Button>
         </div>
 
+        {/* Tabs de Filtro por Status */}
+        <div className="grid grid-cols-2 p-1 bg-zinc-900 rounded-xl border border-zinc-800 text-xs font-semibold">
+          <button
+            onClick={() => setActiveTab('analise')}
+            className={`py-1.5 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'analise'
+                ? 'bg-orange-500 text-white shadow-md font-bold'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Filter className="w-3.5 h-3.5" /> Em Análise / Campo
+          </button>
+
+          <button
+            onClick={() => setActiveTab('todas')}
+            className={`py-1.5 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'todas'
+                ? 'bg-orange-500 text-white shadow-md font-bold'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" /> Todas as Obras
+          </button>
+        </div>
+
         {/* Input de Busca */}
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-zinc-500" />
@@ -134,7 +178,10 @@ export function ObrasListPage() {
         ) : obras && obras.length > 0 ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between text-xs text-zinc-400 px-1">
-              <span>{obras.length} {obras.length === 1 ? 'obra encontrada' : 'obras encontradas'}</span>
+              <span>
+                {obras.length} {obras.length === 1 ? 'obra encontrada' : 'obras encontradas'}{' '}
+                {activeTab === 'analise' && '(Excluindo Vistoria Solicitada)'}
+              </span>
               {search && (
                 <button onClick={() => setSearch('')} className="text-orange-400 hover:underline">
                   Limpar busca
@@ -152,11 +199,13 @@ export function ObrasListPage() {
             </div>
             <div className="space-y-1 max-w-xs">
               <h3 className="text-base font-semibold text-zinc-200">
-                {search ? 'Nenhuma obra encontrada' : 'Nenhuma obra cadastrada'}
+                {search ? 'Nenhuma obra encontrada' : 'Nenhuma obra nesta visualização'}
               </h3>
               <p className="text-xs text-zinc-400">
                 {search
                   ? 'Tente buscar com outros termos de cliente, cidade ou ID.'
+                  : activeTab === 'analise'
+                  ? "As obras movidas para 'Vistoria Solicitada' são ocultadas desta aba."
                   : 'Importe obras do CRM Groner usando o botão "+" abaixo.'}
               </p>
             </div>

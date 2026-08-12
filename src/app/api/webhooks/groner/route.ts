@@ -61,14 +61,15 @@ export async function POST(request: Request) {
 
     // 2. ENFILEIRAMENTO RESILIENTE NO QSTASH
     const client = new Client();
+
+    // URL dinâmica: Se QSTASH_PROCESS_URL estiver definida usa ela, senão constrói a URL a partir do request (funciona automático em Produção na Vercel e em Dev)
     const processUrl =
       process.env.QSTASH_PROCESS_URL ||
-      'https://16ed-2804-29b8-5015-4c21-943-5b0b-38f7-5810.ngrok-free.app/api/webhooks/groner/process';
+      new URL('/api/webhooks/groner/process', request.url).toString();
 
     console.log(`[RECEIVER] 🚀 Despachando para QStash (Destino: ${processUrl})...`);
 
     // CONVERSÃO EXPLÍCITA DO CORPO PARA STRING JSON VÁLIDA
-    // Evita o erro onde o QStash envia "[object Object]" para a Rota 2
     const jsonBodyString = JSON.stringify(rawBodyObject);
 
     const res = await client.publish({

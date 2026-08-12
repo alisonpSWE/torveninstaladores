@@ -6,7 +6,6 @@ import { Obra } from '@/lib/supabase/types';
 import { PhotoCapture } from './photo-capture';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
   ArrowLeft,
@@ -29,23 +28,12 @@ import {
   Link as LinkIcon,
 } from 'lucide-react';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { useObra, useSyncObraWithGroner, useUpdateObraStatus, useUpdateObraDriveLink, useUpdateObraObservacoes } from '@/lib/query/hooks';
+import { useObra, useSyncObraWithGroner, useUpdateObraDriveLink, useUpdateObraObservacoes } from '@/lib/query/hooks';
 
 interface ObraDetailPageProps {
   idObra?: string | number;
   obra?: Obra;
 }
-
-const STATUS_OPTIONS = [
-  'Em Análise Técnica',
-  'Documentação em Análise',
-  'Instalação liberada',
-  'Em andamento',
-  'Vistoria Solicitada',
-  'Aguardando material',
-  'Concluída',
-  'Cancelada',
-];
 
 export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProps) {
   const targetId = idObra || initialObra?.id_obra || 0;
@@ -75,7 +63,6 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
   };
 
   const syncWithGronerMutation = useSyncObraWithGroner();
-  const updateStatusMutation = useUpdateObraStatus();
   const updateDriveLinkMutation = useUpdateObraDriveLink();
   const updateObsMutation = useUpdateObraObservacoes();
 
@@ -85,19 +72,6 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
       await syncWithGronerMutation.mutateAsync(obra.id_obra);
     } catch (err: any) {
       alert(`Falha ao sincronizar com o Groner CRM: ${err.message}`);
-    }
-  };
-
-  const handleStatusSelect = async (newStatus: string) => {
-    if (!obra || newStatus === obra.status) return;
-
-    try {
-      await updateStatusMutation.mutateAsync({
-        id_obra: obra.id_obra,
-        status: newStatus,
-      });
-    } catch (err: any) {
-      alert(`Erro ao atualizar status: ${err.message}`);
     }
   };
 
@@ -185,11 +159,6 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
         <div className="space-y-3 bg-zinc-900/90 p-4 rounded-2xl border border-zinc-800 shadow-md">
           <div className="flex items-center justify-between">
             <span className="text-xs uppercase font-bold text-[#ffc61e] tracking-wider">Cliente</span>
-            {updateStatusMutation.isPending ? (
-              <span className="text-xs text-[#ffc61e] flex items-center gap-1 font-semibold">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Atualizando status...
-              </span>
-            ) : null}
           </div>
 
           <div className="flex items-start justify-between gap-2">
@@ -206,32 +175,14 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
             </button>
           </div>
 
-          {/* Select de Status com Vínculo de Acessibilidade */}
+          {/* Status Atual (Somente Leitura - Gerenciado pelo Groner CRM) */}
           <div className="space-y-1.5 pt-1">
-            <label htmlFor="obra-status-select" className="text-xs text-zinc-400 font-semibold">
-              Status Atual (Clique para alterar):
-            </label>
-            <div className="relative">
-              <select
-                id="obra-status-select"
-                value={obra.status}
-                onChange={(e) => handleStatusSelect(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-700 text-xs font-bold text-zinc-100 rounded-xl px-3 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-[#ffc61e] cursor-pointer min-h-[48px]"
-              >
-                {STATUS_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt} className="bg-zinc-900 text-zinc-100">
-                    {opt}
-                  </option>
-                ))}
-                {!STATUS_OPTIONS.includes(obra.status) && (
-                  <option value={obra.status} className="bg-zinc-900 text-zinc-100">
-                    {obra.status}
-                  </option>
-                )}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-zinc-400">
-                ▼
-              </div>
+            <span className="text-xs text-zinc-400 font-semibold block">
+              Status Atual (Groner CRM):
+            </span>
+            <div className="inline-flex items-center gap-2 bg-zinc-950 border border-zinc-800 px-3.5 py-2.5 rounded-xl text-xs font-bold text-[#ffc61e] w-full">
+              <span className="w-2 h-2 rounded-full bg-[#ffc61e] animate-pulse shrink-0"></span>
+              <span className="truncate">{obra.status}</span>
             </div>
           </div>
 

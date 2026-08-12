@@ -15,18 +15,20 @@ export async function POST(request: Request) {
   console.log('======================================================');
 
   try {
-    const body = await request.json().catch(() => ({}));
+    const rawBodyObject = await request.json().catch(() => ({}));
+
+    console.log('[RECEIVER] 📦 Payload bruto recebido:\n', JSON.stringify(rawBodyObject, null, 2));
 
     // Extração flexível com suporte a PascalCase (Id, Status.Nome) e camelCase
-    const rawId = body.Id || body.id || body.id_obra || body.projetoId || body.Content?.id;
+    const rawId = rawBodyObject.Id || rawBodyObject.id || rawBodyObject.id_obra || rawBodyObject.projetoId || rawBodyObject.Content?.id;
     const rawStatus =
-      body.Status?.Nome ||
-      body.status?.nome ||
-      body.novo_status ||
-      (typeof body.Status === 'string' ? body.Status : null) ||
-      (typeof body.status === 'string' ? body.status : null) ||
-      body.etapaNome ||
-      body.Content?.status?.nome;
+      rawBodyObject.Status?.Nome ||
+      rawBodyObject.status?.nome ||
+      rawBodyObject.novo_status ||
+      (typeof rawBodyObject.Status === 'string' ? rawBodyObject.Status : null) ||
+      (typeof rawBodyObject.status === 'string' ? rawBodyObject.status : null) ||
+      rawBodyObject.etapaNome ||
+      rawBodyObject.Content?.status?.nome;
 
     const idObra = Number(rawId);
     const statusNome = typeof rawStatus === 'string' ? rawStatus.trim() : '';
@@ -61,19 +63,25 @@ export async function POST(request: Request) {
     const client = new Client();
     const processUrl =
       process.env.QSTASH_PROCESS_URL ||
-      new URL('/api/webhooks/groner/process', request.url).toString();
+      'https://16ed-2804-29b8-5015-4c21-943-5b0b-38f7-5810.ngrok-free.app/api/webhooks/groner/process';
 
     console.log(`[RECEIVER] 🚀 Despachando para QStash (Destino: ${processUrl})...`);
 
-    // Publica no QStash configurando 3 retries e timeout curto
+    // CONVERSÃO EXPLÍCITA DO CORPO PARA STRING JSON VÁLIDA
+    // Evita o erro onde o QStash envia "[object Object]" para a Rota 2
+    const jsonBodyString = JSON.stringify(rawBodyObject);
+
     const res = await client.publish({
       url: processUrl,
-      body,
+      body: jsonBodyString,
+      headers: {
+        'Content-Type': 'application/json',
+      },
       retries: 3, // Força o QStash a tentar até 3 vezes se a Rota 2 (Processadora) falhar
     });
 
     const duration = Date.now() - startTime;
-    console.log(`[RECEIVER] ✅ Enfileirado com sucesso em ${duration}ms! Message ID: ${res.messageId}`);
+    console.log(`[RECEIVER] ✅ Enfileirado no QStash com sucesso em ${duration}ms! Message ID: ${res.messageId}`);
     console.log('======================================================\n');
 
     // Resposta ultra-rápida HTTP 200 OK para o Groner CRM (< 200ms)
@@ -86,7 +94,6 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     console.error('[RECEIVER] 💥 Erro ao comunicar com QStash:', error);
-    // Retorna HTTP 500 caso a chamada à Upstash falhe completamente
     return NextResponse.json(
       { error: error.message || 'Erro interno ao enfileirar webhook.' },
       { status: 500 }

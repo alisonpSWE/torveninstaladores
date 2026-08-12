@@ -44,7 +44,16 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json().catch(() => ({}));
+    let body = await request.json().catch(() => ({}));
+
+    // Se o QStash entregar como string JSON, realiza o parse defensivo
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (e) {
+        console.warn('[QSTASH PROCESSOR] ⚠️ Não foi possível fazer parse do body string.');
+      }
+    }
 
     // 2. EXTRAÇÃO SEGURA (Tolerando PascalCase e camelCase)
     const rawId = body.Id || body.id || body.id_obra || body.projetoId || body.Content?.id;

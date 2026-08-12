@@ -52,6 +52,8 @@ export function PhotoCapture({ obraId }: PhotoCaptureProps) {
               <img
                 src={prev.url}
                 alt="Preview da foto tirada"
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-cover"
               />
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
@@ -65,17 +67,19 @@ export function PhotoCapture({ obraId }: PhotoCaptureProps) {
       )}
 
       {/* Botão para Acionar Câmera Nativa em Alto Contraste 14:1 */}
-      <label className="block w-full cursor-pointer">
+      <label htmlFor="camera-file-input" className="block w-full cursor-pointer">
         <div className="w-full h-12 rounded-xl bg-[#ffc61e] hover:bg-[#e5b010] text-black font-extrabold text-sm flex items-center justify-center gap-2 shadow-md border border-[#ffc61e]/40 active:scale-[0.99] transition-all">
           <Camera className="w-5 h-5 stroke-[2.5]" />
           <span>Tirar Foto com a Câmera</span>
         </div>
         <input
+          id="camera-file-input"
           type="file"
           accept="image/*"
           capture="environment"
           onChange={handleFileChange}
           className="hidden"
+          aria-label="Tirar ou selecionar foto"
         />
       </label>
 
@@ -100,7 +104,7 @@ export function PhotoCapture({ obraId }: PhotoCaptureProps) {
               size="sm"
               variant="outline"
               onClick={processQueueInForeground}
-              className="h-8 text-xs bg-[#ffc61e] text-black hover:bg-[#e5b010] font-bold border-none"
+              className="h-8 text-xs min-h-[44px] bg-[#ffc61e] text-black hover:bg-[#e5b010] font-bold border-none"
             >
               Enviar Agora
             </Button>

@@ -83,57 +83,62 @@ export function ObrasListPage() {
       <NetworkStatus />
 
       {/* Header Fixo */}
-      <header className="sticky top-0 z-30 bg-black/95 backdrop-blur-md border-b border-zinc-800 p-4 space-y-3 shadow-lg">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-[#ffc61e] flex items-center justify-center border border-[#ffc61e]/40 shadow-sm">
-              <Sun className="w-6 h-6 text-black stroke-[2.5]" />
+      <header className="sticky top-0 z-30 bg-black/95 backdrop-blur-md border-b border-zinc-800 p-4 shadow-lg">
+        <div className="max-w-5xl mx-auto w-full space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-[#ffc61e] flex items-center justify-center border border-[#ffc61e]/40 shadow-sm">
+                <Sun className="w-6 h-6 text-black stroke-[2.5]" />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-white leading-tight tracking-tight">TORVEN</h1>
+                <p className="text-xs text-[#ffc61e] font-extrabold tracking-widest uppercase">Instaladores</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-lg font-bold text-white leading-tight tracking-tight">TORVEN</h1>
-              <p className="text-xs text-[#ffc61e] font-extrabold tracking-widest uppercase">Instaladores</p>
-            </div>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => refetch()}
+              disabled={mounted ? isFetching : false}
+              title="Atualizar lista"
+              aria-label="Atualizar lista de obras"
+              className="rounded-xl border border-zinc-800 bg-zinc-900/60 min-h-[44px] min-w-[44px]"
+            >
+              <RefreshCw className={`w-4 h-4 text-zinc-400 ${mounted && isFetching ? 'animate-spin text-[#ffc61e]' : ''}`} />
+            </Button>
           </div>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => refetch()}
-            disabled={mounted ? isFetching : false}
-            title="Atualizar lista"
-            className="rounded-xl border border-zinc-800 bg-zinc-900/60 min-h-[44px] min-w-[44px]"
-          >
-            <RefreshCw className={`w-4 h-4 text-zinc-400 ${mounted && isFetching ? 'animate-spin text-[#ffc61e]' : ''}`} />
-          </Button>
-        </div>
-
-        {/* Input de Busca com Foco em Alto Contraste */}
-        <div className="relative">
-          <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-zinc-400" />
-          <Input
-            type="text"
-            placeholder="Buscar por cliente, ID ou cidade..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 bg-zinc-900 border-zinc-800 focus:border-[#ffc61e] text-sm text-zinc-100 placeholder:text-zinc-400 min-h-[48px]"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-3 top-2.5 text-xs text-[#ffc61e] bg-zinc-800 hover:bg-zinc-700 px-2 py-1 rounded-md font-semibold transition-colors"
-              title="Limpar busca"
-            >
-              Limpar
-            </button>
-          )}
+          {/* Input de Busca com Foco em Alto Contraste */}
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-zinc-400" />
+            <Input
+              type="text"
+              placeholder="Buscar por cliente, ID ou cidade..."
+              aria-label="Buscar por cliente, ID ou cidade"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10 bg-zinc-900 border-zinc-800 focus:border-[#ffc61e] text-sm text-zinc-100 placeholder:text-zinc-400 min-h-[48px]"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-2.5 text-xs text-[#ffc61e] bg-zinc-800 hover:bg-zinc-700 px-2 py-1 rounded-md font-semibold transition-colors min-h-[36px] flex items-center"
+                title="Limpar busca"
+                aria-label="Limpar busca"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
       {/* Conteúdo Principal */}
-      <main className="flex-1 p-4 space-y-3">
+      <main className="flex-1 p-4 max-w-5xl mx-auto w-full space-y-3">
         {!mounted || isLoading ? (
-          <div className="space-y-3 pt-2">
-            {[1, 2, 3, 4].map((i) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
               <div key={i} className="h-32 rounded-xl bg-zinc-900/60 border border-zinc-800/60 animate-pulse p-4 space-y-3">
                 <div className="flex justify-between">
                   <div className="h-4 w-24 bg-zinc-800 rounded"></div>
@@ -151,9 +156,11 @@ export function ObrasListPage() {
                 {obras.length} {obras.length === 1 ? 'obra encontrada' : 'obras encontradas'}
               </span>
             </div>
-            {obras.map((obra) => (
-              <ObraCard key={obra.id_obra} obra={obra} />
-            ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {obras.map((obra) => (
+                <ObraCard key={obra.id_obra} obra={obra} />
+              ))}
+            </div>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">

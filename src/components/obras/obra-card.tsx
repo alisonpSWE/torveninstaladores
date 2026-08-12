@@ -14,7 +14,10 @@ interface ObraCardProps {
 
 export function ObraCard({ obra }: ObraCardProps) {
   return (
-    <Link href={`/obra/${obra.id_obra}`} className="block group focus:outline-none">
+    <Link
+      href={`/obra/${obra.id_obra}`}
+      className="block group rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ffc61e] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+    >
       <Card className="p-4 border-zinc-800 bg-zinc-900/80 hover:bg-zinc-800/80 hover:border-zinc-700 active:scale-[0.99] transition-all duration-150">
         <div className="flex items-start justify-between gap-3 mb-2.5">
           <div className="space-y-1 flex-1 min-w-0">

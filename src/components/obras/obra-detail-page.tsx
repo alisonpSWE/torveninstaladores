@@ -150,34 +150,37 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
   return (
     <div className="flex flex-col min-h-screen pb-20 bg-black text-zinc-100">
       {/* Header Fixo de Navegação */}
-      <header className="sticky top-0 z-30 bg-black/95 backdrop-blur-md border-b border-zinc-800 p-4 flex items-center justify-between">
-        <Link href="/" className="inline-flex items-center text-xs text-zinc-400 hover:text-white transition-colors">
-          <Button variant="ghost" size="sm" className="px-2.5 py-1.5 h-auto text-zinc-300 min-h-[44px]">
-            <ArrowLeft className="w-4 h-4 mr-1.5" /> Voltar
-          </Button>
-        </Link>
+      <header className="sticky top-0 z-30 bg-black/95 backdrop-blur-md border-b border-zinc-800 p-4">
+        <div className="max-w-4xl mx-auto w-full flex items-center justify-between">
+          <Link href="/" className="inline-flex items-center text-xs text-zinc-400 hover:text-white transition-colors">
+            <Button variant="ghost" size="sm" className="px-2.5 py-1.5 h-auto text-zinc-300 min-h-[44px]">
+              <ArrowLeft className="w-4 h-4 mr-1.5" /> Voltar
+            </Button>
+          </Link>
 
-        <div className="flex items-center gap-2">
-          {/* BOTÃO DE PÂNICO: Sincronização Manual com CRM */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handlePanicSync}
-            disabled={syncWithGronerMutation.isPending}
-            className="h-9 text-xs border-[#ffc61e]/40 bg-[#ffc61e]/10 text-[#ffc61e] hover:bg-[#ffc61e]/20 px-3 font-semibold transition-all min-h-[44px]"
-            title="Botão de Pânico: Forçar sincronização manual com o Groner CRM"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${syncWithGronerMutation.isPending ? 'animate-spin text-[#ffc61e]' : ''}`} />
-            {syncWithGronerMutation.isPending ? 'Sincronizando...' : 'Sincronizar CRM'}
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* BOTÃO DE PÂNICO: Sincronização Manual com CRM */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePanicSync}
+              disabled={syncWithGronerMutation.isPending}
+              className="h-9 text-xs border-[#ffc61e]/40 bg-[#ffc61e]/10 text-[#ffc61e] hover:bg-[#ffc61e]/20 px-3 font-semibold transition-all min-h-[44px]"
+              title="Botão de Pânico: Forçar sincronização manual com o Groner CRM"
+              aria-label="Forçar sincronização manual com o Groner CRM"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${syncWithGronerMutation.isPending ? 'animate-spin text-[#ffc61e]' : ''}`} />
+              {syncWithGronerMutation.isPending ? 'Sincronizando...' : 'Sincronizar CRM'}
+            </Button>
 
-          <span className="font-mono text-xs text-[#ffc61e] bg-[#ffc61e]/15 px-2.5 py-1 rounded-md border border-[#ffc61e]/30 font-bold">
-            #{obra.id_obra}
-          </span>
+            <span className="font-mono text-xs text-[#ffc61e] bg-[#ffc61e]/15 px-2.5 py-1 rounded-md border border-[#ffc61e]/30 font-bold">
+              #{obra.id_obra}
+            </span>
+          </div>
         </div>
       </header>
 
-      <main className="p-4 space-y-4">
+      <main className="p-4 max-w-4xl mx-auto w-full space-y-4">
         {/* Banner do Cliente & Status */}
         <div className="space-y-3 bg-zinc-900/90 p-4 rounded-2xl border border-zinc-800 shadow-md">
           <div className="flex items-center justify-between">
@@ -197,16 +200,20 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
               disabled={syncWithGronerMutation.isPending}
               className="p-2 text-zinc-400 hover:text-[#ffc61e] hover:bg-zinc-800 rounded-lg transition-colors shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
               title="Forçar atualização dos dados da obra"
+              aria-label="Forçar atualização dos dados da obra"
             >
               <RefreshCw className={`w-4 h-4 ${syncWithGronerMutation.isPending ? 'animate-spin text-[#ffc61e]' : ''}`} />
             </button>
           </div>
 
-          {/* Select de Status */}
+          {/* Select de Status com Vínculo de Acessibilidade */}
           <div className="space-y-1.5 pt-1">
-            <label className="text-xs text-zinc-400 font-semibold">Status Atual (Clique para alterar):</label>
+            <label htmlFor="obra-status-select" className="text-xs text-zinc-400 font-semibold">
+              Status Atual (Clique para alterar):
+            </label>
             <div className="relative">
               <select
+                id="obra-status-select"
                 value={obra.status}
                 onChange={(e) => handleStatusSelect(e.target.value)}
                 className="w-full bg-zinc-950 border border-zinc-700 text-xs font-bold text-zinc-100 rounded-xl px-3 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-[#ffc61e] cursor-pointer min-h-[48px]"

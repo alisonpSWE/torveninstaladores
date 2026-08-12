@@ -12,7 +12,7 @@ export async function fetchGronerProject(idObra: number | string, retries = 2): 
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     const controller = new AbortController();
-    // Timeout de 8 segundos por tentativa para caber no ciclo serverless da Vercel
+    // Limite estrito de 8000ms (8 segundos) por requisição HTTP
     const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     try {
@@ -44,7 +44,7 @@ export async function fetchGronerProject(idObra: number | string, retries = 2): 
       console.warn(`[GRONER API] Tentativa ${attempt}/${retries} para obra #${idObra} falhou:`, lastError?.message);
 
       if (attempt < retries) {
-        // Backoff rápido: 1s
+        // Backoff de 1s entre tentativas internas rápidas
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }

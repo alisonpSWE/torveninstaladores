@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   console.log('[QSTASH PROCESSOR] ⚡ Novo job recebido da fila QStash!');
   console.log('======================================================');
 
-  // 1. VALIDAÇÃO DE SEGURANÇA DA ASSINATURA QSTASH (Se as chaves estiverem configuradas)
+  // 1. SEGURANÇA (JWT / Assinatura QStash)
   const currentKey = process.env.QSTASH_CURRENT_SIGNING_KEY;
   const nextKey = process.env.QSTASH_NEXT_SIGNING_KEY;
 
@@ -35,18 +35,18 @@ export async function POST(request: Request) {
       });
 
       if (!isValid) {
-        console.error('[QSTASH PROCESSOR] ❌ Assinatura QStash inválida ou não autorizada!');
+        console.error('[QSTASH PROCESSOR] ❌ Assinatura QStash não autorizada!');
         return NextResponse.json({ error: 'Assinatura QStash não autorizada.' }, { status: 401 });
       }
     } catch (verifyError: any) {
-      console.warn('[QSTASH PROCESSOR] ⚠️ Validação de assinatura pulada ou com erro local:', verifyError.message);
+      console.warn('[QSTASH PROCESSOR] ⚠️ Validação de assinatura pulada em dev local:', verifyError.message);
     }
   }
 
   try {
     const body = await request.json().catch(() => ({}));
 
-    // Extração flexível de ID e Status
+    // 2. EXTRAÇÃO SEGURA (Tolerando PascalCase e camelCase)
     const rawId = body.Id || body.id || body.id_obra || body.projetoId || body.Content?.id;
     const rawStatus =
       body.Status?.Nome ||
@@ -64,7 +64,6 @@ export async function POST(request: Request) {
 
     if (!idObra || isNaN(idObra)) {
       console.warn('[QSTASH PROCESSOR] ⚠️ ID de obra inválido no payload. Cancelando job sem retry.');
-      // 200 OK para payload inválido permanente, evitando retries infinitos inúteis
       return NextResponse.json({ message: 'Payload inválido. Job descartado.' }, { status: 200 });
     }
 
@@ -72,7 +71,7 @@ export async function POST(request: Request) {
       (allowed) => allowed.toLowerCase() === statusNome.toLowerCase()
     ) || statusNome || 'Vistoria Solicitada';
 
-    // 2. BUSCA DE DADOS NA API DA GRONER (8s max timeout por tentativa)
+    // 3. PROCESSAMENTO ETL (API Groner + Parse)
     console.log(`[QSTASH PROCESSOR] ⚙️ Conectando com a API Groner para a Obra #${idObra}...`);
     const rawData = await fetchGronerProject(idObra);
 
@@ -89,7 +88,7 @@ export async function POST(request: Request) {
       `  • Inversor: ${obraFormatada.inversor_marca} ${obraFormatada.inversor_modelo}`
     );
 
-    // 3. PERSISTÊNCIA NO SUPABASE VIA CLIENTE ADMIN
+    // PERSISTÊNCIA NO SUPABASE VIA CLIENTE ADMIN
     const supabase = createAdminClient();
     const { data, error } = await (supabase.from('obras' as any) as any)
       .upsert(obraFormatada, { onConflict: 'id_obra' })
@@ -97,8 +96,8 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
-      console.error(`[QSTASH PROCESSOR] ❌ Erro de banco no Supabase para Obra #${idObra}:`, error.message);
-      // Retorna HTTP 500 estrito para FORÇAR O RETRY NO QSTASH se o banco estiver indisponível
+      console.error(`[QSTASH PROCESSOR] ❌ Erro no Supabase para Obra #${idObra}:`, error.message);
+      // 4. RETORNO 500 ESTRITO PARA ACIONAR RETRY NO QSTASH COM BACKOFF EXPONENCIAL
       return NextResponse.json(
         { error: `Erro no Supabase: ${error.message}` },
         { status: 500 }
@@ -108,7 +107,6 @@ export async function POST(request: Request) {
     console.log(`[QSTASH PROCESSOR] ✅ Sucesso absoluto! Obra #${idObra} ("${obraFormatada.cliente}") gravada no Supabase.`);
     console.log('======================================================\n');
 
-    // 200 OK indica para o QStash que o job foi CONCLUÍDO e pode ser removido da fila
     return NextResponse.json({
       message: `Job concluído com sucesso para Obra #${idObra}!`,
       status: matchedStatus,
@@ -116,13 +114,9 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     console.error('[QSTASH PROCESSOR] 💥 Falha na execução do Job:', error?.message || error);
-
-    // RETORNA HTTP 500 ESTRITO PARA O QSTASH DISPARAR RETRY COM BACKOFF EXPONENCIAL
+    // 4. RETORNO 500 ESTRITO PARA ACIONAR RETRY NO QSTASH COM BACKOFF EXPONENCIAL
     return NextResponse.json(
-      {
-        error: error?.message || 'Falha no processamento do job.',
-        timestamp: new Date().toISOString(),
-      },
+      { error: error?.message || 'Falha no processamento do job QStash.' },
       { status: 500 }
     );
   }

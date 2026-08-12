@@ -25,8 +25,10 @@ import {
   Edit3,
   CheckCircle2,
   Loader2,
+  MessageSquare,
   Link as LinkIcon,
 } from 'lucide-react';
+import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useObra, useSyncObraWithGroner, useUpdateObraStatus, useUpdateObraDriveLink, useUpdateObraObservacoes } from '@/lib/query/hooks';
 
 interface ObraDetailPageProps {
@@ -54,6 +56,7 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
   const [driveLinkInput, setDriveLinkInput] = useState('');
   const [isEditingObs, setIsEditingObs] = useState(false);
   const [obsText, setObsText] = useState('');
+  const [callConfirmDialogOpen, setCallConfirmDialogOpen] = useState(false);
 
   useEffect(() => {
     if (obra) {
@@ -61,6 +64,15 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
       setObsText(obra.observacoes || '');
     }
   }, [obra]);
+
+  const getWhatsAppUrl = (phone: string | null) => {
+    if (!phone || phone === 'Sem telefone') return null;
+    const cleanNumber = phone.replace(/\D/g, '');
+    if (!cleanNumber) return null;
+    const fullNumber = cleanNumber.startsWith('55') ? cleanNumber : `55${cleanNumber}`;
+    const message = `Olá ${obra?.cliente || ''}! Sou da equipe de instalação da Torven energia solar.`;
+    return `https://wa.me/${fullNumber}?text=${encodeURIComponent(message)}`;
+  };
 
   const syncWithGronerMutation = useSyncObraWithGroner();
   const updateStatusMutation = useUpdateObraStatus();
@@ -231,26 +243,44 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
           </h2>
 
           {obra.telefone && obra.telefone !== 'Sem telefone' ? (
-            <a href={`tel:${obra.telefone.replace(/\D/g, '')}`} className="block w-full">
-              <Card className="p-4 bg-emerald-950/40 border-emerald-500/40 hover:bg-emerald-900/50 hover:border-emerald-500/60 active:scale-[0.99] transition-all group">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform">
-                      <PhoneCall className="w-6 h-6 animate-pulse" />
-                    </div>
-                    <div>
-                      <span className="text-xs text-emerald-400 font-bold uppercase tracking-wider">Ligar para o Cliente</span>
-                      <p className="text-base font-bold text-white group-hover:text-emerald-300 transition-colors">
-                        {obra.telefone}
-                      </p>
-                    </div>
+            <Card className="p-4 bg-zinc-900/90 border-zinc-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                    <PhoneCall className="w-5 h-5" />
                   </div>
-                  <Badge variant="success" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 px-3 py-1 text-xs font-bold">
-                    Um Toque
-                  </Badge>
+                  <div>
+                    <span className="text-xs text-zinc-400 font-semibold uppercase tracking-wider">Contato do Cliente</span>
+                    <p className="text-base font-bold text-white">
+                      {obra.telefone}
+                    </p>
+                  </div>
                 </div>
-              </Card>
-            </a>
+              </div>
+
+              {/* Botões de Ação com Alvo de Toque ≥44px */}
+              <div className="grid grid-cols-2 gap-2.5 pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCallConfirmDialogOpen(true)}
+                  className="w-full min-h-[44px] border-zinc-700 bg-zinc-800/80 text-zinc-100 hover:bg-zinc-800 hover:text-white font-bold text-xs flex items-center justify-center gap-2"
+                >
+                  <PhoneCall className="w-4 h-4 text-emerald-400" /> Ligar
+                </Button>
+
+                {getWhatsAppUrl(obra.telefone) && (
+                  <a
+                    href={getWhatsAppUrl(obra.telefone)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full min-h-[44px] rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-sm"
+                  >
+                    <MessageSquare className="w-4 h-4 fill-white/20" /> WhatsApp
+                  </a>
+                )}
+              </div>
+            </Card>
           ) : (
             <Card className="p-3 bg-zinc-900/50 border-zinc-800 text-zinc-400 text-xs flex items-center justify-between">
               <span>Telefone não cadastrado para esta obra.</span>
@@ -564,6 +594,36 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
           </Card>
         </section>
       </main>
+
+      {/* Modal de Confirmação para Ligação Direta */}
+      <Dialog open={callConfirmDialogOpen} onOpenChange={setCallConfirmDialogOpen}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-emerald-400">
+            <PhoneCall className="w-5 h-5" /> Confirmar Ligação
+          </DialogTitle>
+          <DialogDescription className="text-zinc-300 text-xs pt-1 leading-relaxed">
+            Deseja realizar a chamada telefônica para <strong className="text-white">{obra.cliente}</strong> no número <span className="font-mono text-emerald-400 font-bold">{obra.telefone}</span>?
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex items-center justify-end gap-2 pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setCallConfirmDialogOpen(false)}
+            className="min-h-[44px]"
+          >
+            Cancelar
+          </Button>
+          {obra.telefone && (
+            <a href={`tel:${obra.telefone.replace(/\D/g, '')}`} onClick={() => setCallConfirmDialogOpen(false)}>
+              <Button type="button" className="bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold min-h-[44px]">
+                <PhoneCall className="w-4 h-4 mr-1.5" /> Confirmar e Ligar
+              </Button>
+            </a>
+          )}
+        </div>
+      </Dialog>
     </div>
   );
 }

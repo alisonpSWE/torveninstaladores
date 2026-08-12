@@ -27,14 +27,14 @@ export function ObraCard({ obra }: ObraCardProps) {
         <div className="flex items-start justify-between gap-3 mb-2.5">
           <div className="space-y-1 flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-xs text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-md border border-orange-500/20 font-bold">
+              <span className="font-mono text-xs text-[#ffc61e] bg-[#ffc61e]/10 px-2 py-0.5 rounded-md border border-[#ffc61e]/20 font-bold">
                 #{obra.id_obra}
               </span>
               <Badge variant={getBadgeVariant(obra.status)}>
                 {obra.status}
               </Badge>
             </div>
-            <h2 className="text-base font-bold text-white truncate leading-snug group-hover:text-orange-400 transition-colors">
+            <h2 className="text-base font-bold text-white truncate leading-snug group-hover:text-[#ffc61e] transition-colors">
               {obra.cliente}
             </h2>
           </div>
@@ -45,7 +45,7 @@ export function ObraCard({ obra }: ObraCardProps) {
               <Zap className="w-4 h-4 fill-amber-400/20" />
               <span>{obra.potencia_total_kwp ? obra.potencia_total_kwp.toFixed(2) : '0.00'}</span>
             </div>
-            <span className="text-[10px] text-zinc-400 font-medium uppercase mt-0.5">kWp Total</span>
+            <span className="text-xs text-zinc-400 font-semibold uppercase mt-0.5">kWp Total</span>
           </div>
         </div>
 

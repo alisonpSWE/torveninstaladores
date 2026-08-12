@@ -3,15 +3,15 @@
 import React, { useState, useEffect } from 'react';
 import { useObras, useImportObra } from '@/lib/query/hooks';
 import { ObraCard } from './obra-card';
+import { NetworkStatus } from '@/components/network-status';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Search, RefreshCw, Plus, Sun, AlertCircle, CheckCircle2, Loader2, Layers, Filter } from 'lucide-react';
+import { Search, RefreshCw, Plus, Sun, AlertCircle, CheckCircle2, Loader2, Layers } from 'lucide-react';
 
 export function ObrasListPage() {
   const [mounted, setMounted] = useState(false);
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'analise' | 'todas'>('analise');
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [idsToImport, setIdsToImport] = useState('');
   const [feedback, setFeedback] = useState<{
@@ -24,24 +24,10 @@ export function ObrasListPage() {
     setMounted(true);
   }, []);
 
-  // Regra de Negócio Estrita:
-  // Modo 'analise': Exibe obras em 'Em Análise Técnica', 'Documentação em Análise', etc., e EXCLUI 'Vistoria Solicitada'
-  // Modo 'todas': Exibe todas as obras
-  const { data: obras, isLoading, isFetching, refetch } = useObras(
-    activeTab === 'analise'
-      ? {
-          searchQuery: search,
-          allowedStatuses: [
-            'Em Análise Técnica',
-            'Documentação em Análise',
-            'Instalação liberada',
-            'Em andamento',
-            'Aguardando material',
-          ],
-          excludeStatus: 'Vistoria Solicitada',
-        }
-      : { searchQuery: search }
-  );
+  const { data: obras, isLoading, isFetching, refetch } = useObras({
+    searchQuery: search,
+    excludeStatus: 'Vistoria Solicitada',
+  });
 
   const importMutation = useImportObra();
 
@@ -85,28 +71,27 @@ export function ObrasListPage() {
 
       setIdsToImport('');
       refetch();
-
-      setTimeout(() => {
-        setImportDialogOpen(false);
-        setFeedback(null);
-      }, 2500);
+      // Retained diagnostics feedback for technician inspection; user manually closes dialog.
     } catch (err: any) {
       setFeedback({ type: 'error', message: err.message || 'Erro de conexão ao importar obras.' });
     }
   };
 
   return (
-    <div className="flex flex-col min-h-screen pb-20">
+    <div className="flex flex-col min-h-screen pb-20 bg-black text-zinc-100">
+      {/* Network Connectivity & Offline Status Bar */}
+      <NetworkStatus />
+
       {/* Header Fixo */}
-      <header className="sticky top-0 z-30 bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800 p-4 space-y-3 shadow-lg">
+      <header className="sticky top-0 z-30 bg-black/95 backdrop-blur-md border-b border-zinc-800 p-4 space-y-3 shadow-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-600/30">
-              <Sun className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 rounded-xl bg-[#ffc61e] flex items-center justify-center border border-[#ffc61e]/40 shadow-sm">
+              <Sun className="w-6 h-6 text-black stroke-[2.5]" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-white leading-tight">TORVEN</h1>
-              <p className="text-[11px] text-orange-400 font-medium tracking-wider uppercase">Instaladores</p>
+              <h1 className="text-lg font-bold text-white leading-tight tracking-tight">TORVEN</h1>
+              <p className="text-xs text-[#ffc61e] font-extrabold tracking-widest uppercase">Instaladores</p>
             </div>
           </div>
 
@@ -116,47 +101,31 @@ export function ObrasListPage() {
             onClick={() => refetch()}
             disabled={mounted ? isFetching : false}
             title="Atualizar lista"
-            className="rounded-xl border border-zinc-800 bg-zinc-900/60"
+            className="rounded-xl border border-zinc-800 bg-zinc-900/60 min-h-[44px] min-w-[44px]"
           >
-            <RefreshCw className={`w-4 h-4 text-zinc-400 ${mounted && isFetching ? 'animate-spin text-orange-400' : ''}`} />
+            <RefreshCw className={`w-4 h-4 text-zinc-400 ${mounted && isFetching ? 'animate-spin text-[#ffc61e]' : ''}`} />
           </Button>
         </div>
 
-        {/* Tabs de Filtro por Status */}
-        <div className="grid grid-cols-2 p-1 bg-zinc-900 rounded-xl border border-zinc-800 text-xs font-semibold">
-          <button
-            onClick={() => setActiveTab('analise')}
-            className={`py-1.5 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-              activeTab === 'analise'
-                ? 'bg-orange-500 text-white shadow-md font-bold'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            <Filter className="w-3.5 h-3.5" /> Em Análise / Campo
-          </button>
-
-          <button
-            onClick={() => setActiveTab('todas')}
-            className={`py-1.5 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-              activeTab === 'todas'
-                ? 'bg-orange-500 text-white shadow-md font-bold'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" /> Todas as Obras
-          </button>
-        </div>
-
-        {/* Input de Busca */}
+        {/* Input de Busca com Foco em Alto Contraste */}
         <div className="relative">
-          <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-zinc-500" />
+          <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-zinc-400" />
           <Input
             type="text"
             placeholder="Buscar por cliente, ID ou cidade..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 bg-zinc-900 border-zinc-800 focus:border-orange-500 text-sm placeholder:text-zinc-500"
+            className="pl-10 bg-zinc-900 border-zinc-800 focus:border-[#ffc61e] text-sm text-zinc-100 placeholder:text-zinc-400 min-h-[48px]"
           />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-3 top-2.5 text-xs text-[#ffc61e] bg-zinc-800 hover:bg-zinc-700 px-2 py-1 rounded-md font-semibold transition-colors"
+              title="Limpar busca"
+            >
+              Limpar
+            </button>
+          )}
         </div>
       </header>
 
@@ -179,14 +148,8 @@ export function ObrasListPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between text-xs text-zinc-400 px-1">
               <span>
-                {obras.length} {obras.length === 1 ? 'obra encontrada' : 'obras encontradas'}{' '}
-                {activeTab === 'analise' && '(Excluindo Vistoria Solicitada)'}
+                {obras.length} {obras.length === 1 ? 'obra encontrada' : 'obras encontradas'}
               </span>
-              {search && (
-                <button onClick={() => setSearch('')} className="text-orange-400 hover:underline">
-                  Limpar busca
-                </button>
-              )}
             </div>
             {obras.map((obra) => (
               <ObraCard key={obra.id_obra} obra={obra} />
@@ -194,23 +157,21 @@ export function ObrasListPage() {
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
-            <div className="w-16 h-16 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500">
-              <Sun className="w-8 h-8 text-zinc-600" />
+            <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 shadow-inner">
+              <Sun className="w-8 h-8 text-[#ffc61e]/60" />
             </div>
             <div className="space-y-1 max-w-xs">
-              <h3 className="text-base font-semibold text-zinc-200">
-                {search ? 'Nenhuma obra encontrada' : 'Nenhuma obra nesta visualização'}
+              <h3 className="text-base font-bold text-zinc-200">
+                {search ? 'Nenhuma obra encontrada' : 'Nenhuma obra cadastrada'}
               </h3>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-zinc-400 leading-relaxed">
                 {search
                   ? 'Tente buscar com outros termos de cliente, cidade ou ID.'
-                  : activeTab === 'analise'
-                  ? "As obras movidas para 'Vistoria Solicitada' são ocultadas desta aba."
                   : 'Importe obras do CRM Groner usando o botão "+" abaixo.'}
               </p>
             </div>
             {!search && (
-              <Button onClick={() => setImportDialogOpen(true)} variant="default" size="sm">
+              <Button onClick={() => setImportDialogOpen(true)} variant="default" size="sm" className="min-h-[44px]">
                 <Plus className="w-4 h-4 mr-1.5" /> Importar Obra(s)
               </Button>
             )}
@@ -218,10 +179,10 @@ export function ObrasListPage() {
         )}
       </main>
 
-      {/* Floating Action Button (FAB) */}
+      {/* Floating Action Button (FAB) com Safe-Area Margin */}
       <button
         onClick={() => setImportDialogOpen(true)}
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-tr from-orange-600 to-amber-500 text-white shadow-xl shadow-orange-600/40 flex items-center justify-center hover:scale-105 active:scale-95 transition-all duration-150 border border-amber-400/30"
+        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-[#ffc61e] text-black shadow-lg flex items-center justify-center hover:bg-[#e5b010] active:scale-95 transition-all duration-150 border border-[#ffc61e]/40"
         title="Importar Obra(s) do CRM Groner"
       >
         <Plus className="w-7 h-7 stroke-[2.5]" />
@@ -231,7 +192,7 @@ export function ObrasListPage() {
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Layers className="w-5 h-5 text-orange-400" /> Importar Obra(s) do CRM Groner
+            <Layers className="w-5 h-5 text-[#ffc61e]" /> Importar Obra(s) do CRM Groner
           </DialogTitle>
           <DialogDescription>
             Digite um ou múltiplos IDs numéricos do Groner separados por vírgula (ex: 462, 463, 464) para sincronizar antes de ir para o campo.
@@ -247,7 +208,7 @@ export function ObrasListPage() {
               value={idsToImport}
               onChange={(e) => setIdsToImport(e.target.value)}
               disabled={importMutation.isPending}
-              className="w-full bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono"
+              className="w-full bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#ffc61e] font-mono"
             />
           </div>
 
@@ -269,7 +230,7 @@ export function ObrasListPage() {
               </div>
 
               {feedback.errors && feedback.errors.length > 0 && (
-                <div className="text-[11px] pt-1 text-red-300 space-y-0.5 border-t border-red-500/20">
+                <div className="text-xs pt-1 text-red-300 space-y-0.5 border-t border-red-500/20">
                   {feedback.errors.map((err, idx) => (
                     <div key={idx}>
                       • Obra #{err.id}: {err.message}
@@ -286,10 +247,11 @@ export function ObrasListPage() {
               variant="outline"
               onClick={() => setImportDialogOpen(false)}
               disabled={importMutation.isPending}
+              className="min-h-[44px]"
             >
-              Cancelar
+              {feedback?.type === 'success' ? 'Fechar' : 'Cancelar'}
             </Button>
-            <Button type="submit" disabled={importMutation.isPending}>
+            <Button type="submit" disabled={importMutation.isPending} className="min-h-[44px]">
               {importMutation.isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Importando...

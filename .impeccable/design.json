@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-12T16:38:45Z",
+  "title": "Design System: Torven Instaladores",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Torven High-Vis Solar Yellow",
+        "canonical": "oklch(82% 0.19 85)",
+        "tonalRamp": ["#423000", "#735500", "#a67b00", "#d4a000", "#ffc61e", "#ffd554", "#ffe48a", "#fff3bf"]
+      },
+      "neutral-bg": {
+        "role": "neutral",
+        "displayName": "Deep Black Canvas",
+        "canonical": "oklch(0% 0 0)",
+        "tonalRamp": ["#000000", "#09090b", "#121215", "#27272a", "#3f3f46", "#52525b", "#71717a", "#fafafa"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display Title", "purpose": "Screen and project headlines." },
+      "body": { "displayName": "Body Copy", "purpose": "Standard field text and notes." }
+    },
+    "shadows": [
+      { "name": "tactile-lift", "value": "0 4px 12px rgba(255, 198, 30, 0.2)", "purpose": "Floating action buttons and primary triggers." }
+    ],
+    "motion": [
+      { "name": "tap-active", "value": "transform scale(0.98) 100ms ease-out", "purpose": "Tactile touch feedback on buttons and cards." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary high-visibility field trigger button with black text.",
+      "html": "<button class=\"ds-btn-primary\">GUARDAR PROGRESO</button>",
+      "css": ".ds-btn-primary { background: #ffc61e; color: #000000; padding: 12px 16px; min-height: 48px; font-size: 16px; font-weight: 700; border: none; border-radius: 12px; transition: background 0.15s, transform 0.1s; display: inline-flex; align-items: center; justify-content: center; width: 100%; cursor: pointer; } .ds-btn-primary:hover { background: #e5b010; } .ds-btn-primary:active { transform: scale(0.98); }"
+    },
+    {
+      "name": "Work Card (Obra Card)",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Container for individual work site / installation progress summary.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-header\"><h3 class=\"ds-card-title\">Edificio Altamira - Piso 4</h3><span class=\"ds-badge\">En Progreso</span></div><p class=\"ds-card-sub\">Instalación eléctrica y tableros</p></div>",
+      "css": ".ds-card { background: #121215; border: 1px solid #27272a; border-radius: 12px; padding: 16px; color: #fafafa; display: flex; flex-direction: column; gap: 8px; } .ds-card-header { display: flex; justify-content: space-between; align-items: center; } .ds-card-title { font-size: 16px; font-weight: 700; margin: 0; color: #fafafa; } .ds-card-sub { font-size: 14px; color: #a1a1aa; margin: 0; } .ds-badge { background: rgba(255, 198, 30, 0.15); color: #ffc61e; border: 1px solid rgba(255, 198, 30, 0.3); font-size: 12px; padding: 2px 8px; border-radius: 9999px; font-weight: 600; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The High-Vis Solar Rig",
+    "overview": "Torven Instaladores is an ultra-reliable, high-visibility mobile-first design system engineered for solar installation teams on job sites under harsh direct light.",
+    "keyCharacteristics": [
+      "Deep black canvas (#000000) with high-visibility Torven Solar Yellow (#ffc61e) primary accent.",
+      "14:1 contrast ratio on primary action buttons for instant outdoor legibility.",
+      "Touch targets engineered for single-thumb field navigation (minimum 44px–48px height).",
+      "Clean, 1px subtle zinc borders (#27272a) with zero glassmorphism or distracting gradients."
+    ],
+    "rules": [
+      { "name": "The 14:1 Solar Yellow Contrast Rule", "body": "Primary action triggers using #ffc61e MUST use black #000000 text for maximum outdoor visibility.", "section": "colors" },
+      { "name": "The Pure Black Rule", "body": "Background surfaces use deep black (#000000) to save OLED battery on site.", "section": "colors" }
+    ],
+    "dos": [
+      "Do pair #ffc61e primary buttons with black #000000 text for 14:1 contrast ratio.",
+      "Do maintain a minimum 44px–48px touch target for all field actions.",
+      "Do use pure black #000000 base backgrounds for OLED power savings and crisp visual contrast."
+    ],
+    "donts": [
+      "Don't put white text on #ffc61e yellow backgrounds.",
+      "Don't use decorative hero text gradients or background blurs.",
+      "Don't use low-contrast gray text for body copy or input placeholders."
+    ]
+  }
+}

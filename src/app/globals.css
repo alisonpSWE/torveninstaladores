@@ -2,25 +2,38 @@
 
 @layer base {
   :root {
-    --background: 240 10% 3.9%;
+    --color-primary-brand: oklch(82% 0.19 85); /* #ffc61e Torven High-Vis Yellow */
+    --color-primary-hover: oklch(76% 0.18 85); /* #e5b010 */
+    --color-surface-bg: oklch(0% 0 0); /* #000000 Pure Deep Black */
+    --color-surface-card: oklch(14% 0.005 240); /* #121215 */
+    --color-surface-border: oklch(22% 0.01 240); /* #27272a */
+    --color-text-main: oklch(98% 0 0); /* #fafafa */
+    --color-text-muted: oklch(72% 0.01 240); /* #a1a1aa */
+
+    /* Semantic State Tokens */
+    --color-success: oklch(65% 0.18 155);
+    --color-warning: oklch(82% 0.19 85);
+    --color-error: oklch(60% 0.22 25);
+
+    --background: 0 0% 0%;
     --foreground: 0 0% 98%;
     --card: 240 10% 6.5%;
     --card-foreground: 0 0% 98%;
     --popover: 240 10% 6.5%;
     --popover-foreground: 0 0% 98%;
-    --primary: 24.6 95% 53.1%; /* Torven Orange #f97316 */
-    --primary-foreground: 60 9.1% 97.8%;
+    --primary: 45 100% 55.9%; /* #ffc61e */
+    --primary-foreground: 0 0% 0%;
     --secondary: 240 3.7% 15.9%;
     --secondary-foreground: 0 0% 98%;
     --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
+    --muted-foreground: 240 5% 72%;
     --accent: 240 3.7% 15.9%;
     --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
-    --ring: 24.6 95% 53.1%;
+    --ring: 45 100% 55.9%;
     --radius: 0.75rem;
   }
 }
@@ -49,3 +62,4 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #3f3f46;
 }
+

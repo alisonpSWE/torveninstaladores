@@ -88,11 +88,11 @@ export function useOfflinePhotoUpload(obraId: number) {
   );
 
   /**
-   * FLUXO ESTRITO DE SINCRONIZAÇÃO OFFLINE-FIRST:
+   * FLUXO ESTRITO DE SINCRONIZAÇÃO OFFLINE-FIRST (REIDRATAÇÃO DE BINÁRIO):
    * 1. Verifica conectividade (se offline, aborta silenciosamente)
    * 2. Busca fotos pendentes no IndexedDB
-   * 3. Para cada foto: Upload no Storage ➔ Resgate da URL Pública ➔ Insert na tabela obra_photos ➔ Limpeza do IndexedDB
-   * 4. Invalida as queries do TanStack para a UI atualizar instantaneamente
+   * 3. Reidrata o Blob recuperado em um novo objeto File para garantir o buffer ativo
+   * 4. Upload Storage ➔ Resgate URL Pública ➔ Insert obra_photos (com safeFile.size) ➔ Limpeza IndexedDB
    */
   const syncOfflinePhotos = useCallback(async (): Promise<SyncResult> => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -113,7 +113,7 @@ export function useOfflinePhotoUpload(obraId: number) {
     let failedCount = 0;
 
     console.log(
-      `[OFFLINE PHOTO SYNC] 🚀 Iniciando sincronização de ${photosToUpload.length} foto(s) ` +
+      `[OFFLINE PHOTO SYNC] 🚀 Iniciando sincronização reidratada de ${photosToUpload.length} foto(s) ` +
       `para a Obra #${obraId}...`
     );
 
@@ -121,22 +121,28 @@ export function useOfflinePhotoUpload(obraId: number) {
       try {
         await updateOfflinePhotoStatus(photo.id, 'uploading');
 
-        const fileBlob = photo.file || photo.blob;
-        if (!fileBlob) {
-          console.warn(`[OFFLINE PHOTO SYNC] ⚠️ Foto #${photo.id} sem Blob válido. Deletando do IndexedDB.`);
+        // 1. EXTRAÇÃO E VALIDAÇÃO DE SEGURANÇA DO BLOB CRU DO INDEXEDDB
+        const rawBlob = photo.file || photo.blob;
+        if (!rawBlob || rawBlob.size === 0) {
+          console.error(`[OFFLINE PHOTO SYNC] ⚠️ Foto #${photo.id} vazia ou corrompida. Deletando do IndexedDB.`);
           await removeOfflinePhoto(photo.id);
           continue;
         }
 
+        // 2. REIDRATAÇÃO DO BLOB EM UM NOVO OBJETO FILE (Evita 'No content provided' no SDK Supabase)
         const fileNameClean = (photo.fileName || `foto_${Date.now()}.jpg`).replace(/[^a-zA-Z0-9._-]/g, '_');
+        const safeFile = new File([rawBlob], fileNameClean, {
+          type: photo.contentType || 'image/jpeg',
+        });
+
         const storagePath = photo.storagePath || `obra_${obraId}/${photo.timestamp || Date.now()}_${fileNameClean}`;
 
-        // 1. UPLOAD NO SUPABASE STORAGE (Bucket 'photos')
-        console.log(`[OFFLINE PHOTO SYNC] 📤 Enviando para Storage: ${storagePath}...`);
+        // 3. UPLOAD NO SUPABASE STORAGE PASSANDO O safeFile REIDRATADO
+        console.log(`[OFFLINE PHOTO SYNC] 📤 Enviando arquivo reidratado (${safeFile.size} bytes) para Storage: ${storagePath}...`);
         const { error: uploadError } = await supabase.storage
           .from('photos')
-          .upload(storagePath, fileBlob, {
-            contentType: photo.contentType || 'image/jpeg',
+          .upload(storagePath, safeFile, {
+            contentType: safeFile.type,
             upsert: true,
           });
 
@@ -144,37 +150,38 @@ export function useOfflinePhotoUpload(obraId: number) {
           throw new Error(`Erro no Supabase Storage: ${uploadError.message}`);
         }
 
-        // 2. RESGATE DA URL PÚBLICA
+        // 4. RESGATE DA URL PÚBLICA
         const { data: publicUrlData } = supabase.storage
           .from('photos')
           .getPublicUrl(storagePath);
 
         const publicUrl = publicUrlData.publicUrl;
 
-        // 3. INSERÇÃO NA TABELA obra_photos NO SUPABASE
+        // 5. INSERÇÃO NA TABELA obra_photos PASSANDO safeFile.size
         console.log(`[OFFLINE PHOTO SYNC] 💾 Registrando metadados na tabela obra_photos...`);
         const insertPayload: any = {
           id_obra: Number(obraId),
           storage_path: storagePath,
           public_url: publicUrl,
           file_name: photo.fileName || fileNameClean,
-          content_type: photo.contentType || 'image/jpeg',
-          size_bytes: fileBlob.size || 0,
+          content_type: safeFile.type,
+          size_bytes: safeFile.size,
+          category: (photo as any).category || 'registro',
         };
 
         const { error: dbError } = await supabase
-          .from('obra_photos')
+          .from('obra_photos' as any)
           .insert(insertPayload);
 
         if (dbError) {
           throw new Error(`Erro na tabela obra_photos: ${dbError.message}`);
         }
 
-        // 4. LIMPEZA DO INDEXEDDB (Somente após sucesso absoluto no DB)
+        // 6. LIMPEZA DO INDEXEDDB (Somente após sucesso absoluto no DB)
         await removeOfflinePhoto(photo.id);
         syncedCount++;
 
-        console.log(`[OFFLINE PHOTO SYNC] ✅ Foto #${photo.id} sincronizada e removida do cache local!`);
+        console.log(`[OFFLINE PHOTO SYNC] ✅ Foto #${photo.id} reidratada, sincronizada e removida do cache local!`);
       } catch (err: any) {
         failedCount++;
         console.error(`[OFFLINE PHOTO SYNC] ❌ Falha no upload da foto #${photo.id}:`, err.message || err);
@@ -184,7 +191,7 @@ export function useOfflinePhotoUpload(obraId: number) {
 
     setIsSyncing(false);
 
-    // 5. INVALIDAÇÃO DE QUERIES DO TANSTACK QUERY
+    // INVALIDAÇÃO DE QUERIES DO TANSTACK QUERY
     queryClient.invalidateQueries({ queryKey: ['obra-photos', Number(obraId)] });
     queryClient.invalidateQueries({ queryKey: ['offline-photos', Number(obraId)] });
     refetchPending();
@@ -225,7 +232,7 @@ export function useOfflinePhotoUpload(obraId: number) {
   return {
     capturePhoto,
     syncOfflinePhotos,
-    processQueueInForeground: syncOfflinePhotos, // Alias para retrocompatibilidade
+    processQueueInForeground: syncOfflinePhotos,
     pendingCount: pendingPhotos.length,
     pendingPhotos,
     localPreviews,

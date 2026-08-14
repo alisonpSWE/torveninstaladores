@@ -3,10 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Obra } from '@/lib/supabase/types';
-import { PhotoCapture } from './photo-capture';
+import { PhotoGallery } from './photo-gallery';
+import { ObraStatusBadge, getStatusBadgeVariant } from './obra-status-badge';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   ArrowLeft,
   PhoneCall,
@@ -17,7 +17,6 @@ import {
   Cpu,
   Home,
   Calendar,
-  Folder,
   FileText,
   RefreshCw,
   UserCheck,
@@ -25,7 +24,6 @@ import {
   CheckCircle2,
   Loader2,
   MessageSquare,
-  Link as LinkIcon,
 } from 'lucide-react';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useObra, useSyncObraWithGroner, useUpdateObraDriveLink, useUpdateObraObservacoes } from '@/lib/query/hooks';
@@ -40,15 +38,12 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
   const { data: queriedObra, isLoading } = useObra(targetId);
 
   const obra = queriedObra || initialObra;
-  const [isEditingDriveLink, setIsEditingDriveLink] = useState(false);
-  const [driveLinkInput, setDriveLinkInput] = useState('');
   const [isEditingObs, setIsEditingObs] = useState(false);
   const [obsText, setObsText] = useState('');
   const [callConfirmDialogOpen, setCallConfirmDialogOpen] = useState(false);
 
   useEffect(() => {
     if (obra) {
-      setDriveLinkInput(obra.link_fotos || '');
       setObsText(obra.observacoes || '');
     }
   }, [obra]);
@@ -63,7 +58,6 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
   };
 
   const syncWithGronerMutation = useSyncObraWithGroner();
-  const updateDriveLinkMutation = useUpdateObraDriveLink();
   const updateObsMutation = useUpdateObraObservacoes();
 
   const handlePanicSync = async () => {
@@ -72,19 +66,6 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
       await syncWithGronerMutation.mutateAsync(obra.id_obra);
     } catch (err: any) {
       alert(`Falha ao sincronizar com o Groner CRM: ${err.message}`);
-    }
-  };
-
-  const handleSaveDriveLink = async () => {
-    if (!obra) return;
-    try {
-      await updateDriveLinkMutation.mutateAsync({
-        id_obra: obra.id_obra,
-        link_fotos: driveLinkInput.trim() || null,
-      });
-      setIsEditingDriveLink(false);
-    } catch (err: any) {
-      alert(`Erro ao salvar link do Google Drive: ${err.message}`);
     }
   };
 
@@ -110,26 +91,27 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
     );
   }
 
-  const getDirectDriveImageUrl = (url: string | null) => {
-    if (!url) return null;
-    const fileIdMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/);
-    if (fileIdMatch && fileIdMatch[1]) {
-      return `https://lh3.googleusercontent.com/u/0/d/${fileIdMatch[1]}=w1000`;
-    }
-    return null;
-  };
-
-  const directImageUrl = getDirectDriveImageUrl(obra.link_fotos);
+  const statusVariant = getStatusBadgeVariant(obra.status);
+  const statusDotColor =
+    statusVariant === 'success'
+      ? 'bg-emerald-400'
+      : statusVariant === 'warning'
+      ? 'bg-amber-400'
+      : statusVariant === 'danger'
+      ? 'bg-red-400'
+      : 'bg-[#ffc61e]';
 
   return (
     <div className="flex flex-col min-h-screen pb-20 bg-black text-zinc-100">
       {/* Header Fixo de Navegação */}
-      <header className="sticky top-0 z-30 bg-black/95 backdrop-blur-md border-b border-zinc-800 p-4">
+      <header className="sticky top-0 z-30 bg-black/95 backdrop-blur-md border-b border-zinc-800 p-4 shadow-lg">
         <div className="max-w-4xl mx-auto w-full flex items-center justify-between">
-          <Link href="/" className="inline-flex items-center text-xs text-zinc-400 hover:text-white transition-colors">
-            <Button variant="ghost" size="sm" className="px-2.5 py-1.5 h-auto text-zinc-300 min-h-[44px]">
-              <ArrowLeft className="w-4 h-4 mr-1.5" /> Voltar
-            </Button>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white font-bold px-3 py-2 rounded-xl bg-zinc-900/80 border border-zinc-800 hover:bg-zinc-800 transition-colors min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ffc61e]"
+          >
+            <ArrowLeft className="w-4 h-4 text-zinc-400" />
+            <span>Voltar</span>
           </Link>
 
           <div className="flex items-center gap-2">
@@ -139,15 +121,15 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
               size="sm"
               onClick={handlePanicSync}
               disabled={syncWithGronerMutation.isPending}
-              className="h-9 text-xs border-[#ffc61e]/40 bg-[#ffc61e]/10 text-[#ffc61e] hover:bg-[#ffc61e]/20 px-3 font-semibold transition-all min-h-[44px]"
-              title="Botão de Pânico: Forçar sincronização manual com o Groner CRM"
-              aria-label="Forçar sincronização manual com o Groner CRM"
+              className="h-10 text-xs border-[#ffc61e]/40 bg-[#ffc61e]/10 text-[#ffc61e] hover:bg-[#ffc61e]/20 px-3.5 font-bold transition-all min-h-[44px]"
+              title="Sincronizar manualmente com Groner CRM"
+              aria-label="Sincronizar manualmente com Groner CRM"
             >
               <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${syncWithGronerMutation.isPending ? 'animate-spin text-[#ffc61e]' : ''}`} />
               {syncWithGronerMutation.isPending ? 'Sincronizando...' : 'Sincronizar CRM'}
             </Button>
 
-            <span className="font-mono text-xs text-[#ffc61e] bg-[#ffc61e]/15 px-2.5 py-1 rounded-md border border-[#ffc61e]/30 font-bold">
+            <span className="font-mono text-xs text-[#ffc61e] bg-[#ffc61e]/15 px-2.5 py-1.5 rounded-xl border border-[#ffc61e]/30 font-bold">
               #{obra.id_obra}
             </span>
           </div>
@@ -156,18 +138,18 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
 
       <main className="p-4 max-w-4xl mx-auto w-full space-y-4">
         {/* Banner do Cliente & Status */}
-        <div className="space-y-3 bg-zinc-900/90 p-4 rounded-2xl border border-zinc-800 shadow-md">
+        <div className="space-y-3 bg-zinc-900/90 p-4 sm:p-5 rounded-2xl border border-zinc-800 shadow-md">
           <div className="flex items-center justify-between">
-            <span className="text-xs uppercase font-bold text-[#ffc61e] tracking-wider">Cliente</span>
+            <span className="text-xs uppercase font-extrabold text-[#ffc61e] tracking-wider">Obra / Cliente</span>
+            <ObraStatusBadge status={obra.status} />
           </div>
 
           <div className="flex items-start justify-between gap-2">
-            <h1 className="text-xl font-bold text-white leading-tight tracking-tight">{obra.cliente}</h1>
-            {/* Ícone de Refresh no título */}
+            <h1 className="text-xl sm:text-2xl font-bold text-white leading-tight tracking-tight">{obra.cliente}</h1>
             <button
               onClick={handlePanicSync}
               disabled={syncWithGronerMutation.isPending}
-              className="p-2 text-zinc-400 hover:text-[#ffc61e] hover:bg-zinc-800 rounded-lg transition-colors shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
+              className="p-2 text-zinc-400 hover:text-[#ffc61e] hover:bg-zinc-800 rounded-xl transition-colors shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
               title="Forçar atualização dos dados da obra"
               aria-label="Forçar atualização dos dados da obra"
             >
@@ -175,54 +157,54 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
             </button>
           </div>
 
-          {/* Status Atual (Somente Leitura - Gerenciado pelo Groner CRM) */}
+          {/* Status Detalhado */}
           <div className="space-y-1.5 pt-1">
             <span className="text-xs text-zinc-400 font-semibold block">
-              Status Atual (Groner CRM):
+              Status no CRM Groner:
             </span>
-            <div className="inline-flex items-center gap-2 bg-zinc-950 border border-zinc-800 px-3.5 py-2.5 rounded-xl text-xs font-bold text-[#ffc61e] w-full">
-              <span className="w-2 h-2 rounded-full bg-[#ffc61e] animate-pulse shrink-0"></span>
+            <div className="inline-flex items-center gap-2 bg-zinc-950 border border-zinc-800 px-3.5 py-2.5 rounded-xl text-xs font-bold text-zinc-100 w-full">
+              <span className={`w-2.5 h-2.5 rounded-full ${statusDotColor} animate-pulse shrink-0`}></span>
               <span className="truncate">{obra.status}</span>
             </div>
           </div>
 
           {obra.instalador && (
             <div className="flex items-center gap-1.5 text-xs text-zinc-300 pt-2 border-t border-zinc-800/60">
-              <UserCheck className="w-4 h-4 text-emerald-400" />
+              <UserCheck className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>Técnico Responsável: <strong className="text-white font-bold">{obra.instalador}</strong></span>
             </div>
           )}
         </div>
 
         {/* BLOCO 1: Contato e Logística */}
-        <section className="space-y-3">
-          <h2 className="text-xs font-bold text-[#ffc61e] uppercase tracking-wider px-1">
-            Contato e Logística
+        <section className="space-y-2.5">
+          <h2 className="text-sm font-extrabold text-white flex items-center gap-2 px-0.5">
+            <PhoneCall className="w-4 h-4 text-[#ffc61e]" /> Contato e Logística
           </h2>
 
           {obra.telefone && obra.telefone !== 'Sem telefone' ? (
-            <Card className="p-4 bg-zinc-900/90 border-zinc-800 space-y-3">
+            <Card className="p-4 bg-zinc-900/90 border-zinc-800 space-y-3 shadow-md">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
                     <PhoneCall className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-xs text-zinc-400 font-semibold uppercase tracking-wider">Contato do Cliente</span>
-                    <p className="text-base font-bold text-white">
+                    <span className="text-xs text-zinc-400 font-semibold uppercase tracking-wider block">Telefone do Cliente</span>
+                    <p className="text-base font-bold text-white font-mono">
                       {obra.telefone}
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Botões de Ação com Alvo de Toque ≥44px */}
-              <div className="grid grid-cols-2 gap-2.5 pt-1">
+              {/* Botões de Ação com Touch Target ≥48px */}
+              <div className="grid grid-cols-2 gap-3 pt-1">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setCallConfirmDialogOpen(true)}
-                  className="w-full min-h-[44px] border-zinc-700 bg-zinc-800/80 text-zinc-100 hover:bg-zinc-800 hover:text-white font-bold text-xs flex items-center justify-center gap-2"
+                  className="w-full min-h-[48px] h-12 border-zinc-700 bg-zinc-800/80 text-zinc-100 hover:bg-zinc-800 hover:text-white font-bold text-xs flex items-center justify-center gap-2"
                 >
                   <PhoneCall className="w-4 h-4 text-emerald-400" /> Ligar
                 </Button>
@@ -232,7 +214,7 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
                     href={getWhatsAppUrl(obra.telefone)!}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full min-h-[44px] rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-sm"
+                    className="w-full min-h-[48px] h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-sm"
                   >
                     <MessageSquare className="w-4 h-4 fill-white/20" /> WhatsApp
                   </a>
@@ -240,14 +222,14 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
               </div>
             </Card>
           ) : (
-            <Card className="p-3 bg-zinc-900/50 border-zinc-800 text-zinc-400 text-xs flex items-center justify-between">
+            <Card className="p-4 bg-zinc-900/50 border-zinc-800 text-zinc-400 text-xs flex items-center justify-between">
               <span>Telefone não cadastrado para esta obra.</span>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={handlePanicSync}
                 disabled={syncWithGronerMutation.isPending}
-                className="h-8 text-xs border-[#ffc61e]/40 text-[#ffc61e] min-h-[44px]"
+                className="h-9 text-xs border-[#ffc61e]/40 text-[#ffc61e] min-h-[44px]"
               >
                 Buscar CRM
               </Button>
@@ -256,9 +238,9 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
 
           {obra.link_maps && obra.link_maps !== 'Coordenadas ausentes' ? (
             <a href={obra.link_maps} target="_blank" rel="noopener noreferrer" className="block w-full">
-              <Card className="p-4 bg-zinc-900/90 border-zinc-800 hover:border-[#ffc61e]/50 hover:bg-zinc-800/90 active:scale-[0.99] transition-all group">
+              <Card className="p-4 bg-zinc-900/90 border-zinc-800 hover:border-[#ffc61e]/70 hover:bg-zinc-900 active:scale-[0.99] transition-all duration-150 group shadow-md">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#ffc61e]/15 border border-[#ffc61e]/30 flex items-center justify-center text-[#ffc61e] shrink-0 mt-0.5 group-hover:scale-105 transition-transform">
+                  <div className="w-10 h-10 rounded-xl bg-[#ffc61e]/15 border border-[#ffc61e]/30 flex items-center justify-center text-[#ffc61e] shrink-0 mt-0.5">
                     <MapPin className="w-5 h-5" />
                   </div>
                   <div className="space-y-1 flex-1 min-w-0">
@@ -276,7 +258,7 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
               </Card>
             </a>
           ) : (
-            <Card className="p-4 bg-zinc-900/90 border-zinc-800 space-y-2">
+            <Card className="p-4 bg-zinc-900/90 border-zinc-800 space-y-2 shadow-md">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
                   <MapPin className="w-5 h-5 text-zinc-400 shrink-0 mt-0.5" />
@@ -291,7 +273,7 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
                   variant="outline"
                   onClick={handlePanicSync}
                   disabled={syncWithGronerMutation.isPending}
-                  className="h-8 text-xs border-[#ffc61e]/40 text-[#ffc61e] hover:bg-[#ffc61e]/10 shrink-0 min-h-[44px]"
+                  className="h-9 text-xs border-[#ffc61e]/40 text-[#ffc61e] hover:bg-[#ffc61e]/10 shrink-0 min-h-[44px]"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 mr-1 ${syncWithGronerMutation.isPending ? 'animate-spin' : ''}`} />
                   Buscar Endereço
@@ -301,28 +283,28 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
           )}
         </section>
 
-        {/* BLOCO 2: Engenharia */}
-        <section className="space-y-3">
-          <h2 className="text-xs font-bold text-[#ffc61e] uppercase tracking-wider px-1">
-            Especificações de Engenharia
+        {/* BLOCO 2: Especificações de Engenharia */}
+        <section className="space-y-2.5">
+          <h2 className="text-sm font-extrabold text-white flex items-center gap-2 px-0.5">
+            <Zap className="w-4 h-4 text-[#ffc61e]" /> Especificações de Engenharia
           </h2>
 
-          <Card className="p-4 border-zinc-800 bg-zinc-900/90 space-y-4">
+          <Card className="p-4 sm:p-5 border-zinc-800 bg-zinc-900/90 space-y-4 shadow-md">
             <div className="grid grid-cols-2 gap-3 pb-3 border-b border-zinc-800">
               <div className="space-y-1">
-                <div className="flex items-center gap-1.5 text-xs text-[#ffc61e] font-bold">
-                  <Zap className="w-4 h-4" /> Potência Total
+                <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-bold uppercase tracking-wider">
+                  <Zap className="w-3.5 h-3.5 text-[#ffc61e]" /> Potência Total
                 </div>
-                <p className="text-xl font-bold text-white">
-                  {obra.potencia_total_kwp ? obra.potencia_total_kwp.toFixed(2) : '0'} <span className="text-xs font-normal text-zinc-400">kWp</span>
+                <p className="text-2xl font-extrabold text-[#ffc61e]">
+                  {obra.potencia_total_kwp ? obra.potencia_total_kwp.toFixed(2) : '0'} <span className="text-xs font-bold text-zinc-400">kWp</span>
                 </p>
               </div>
 
               <div className="space-y-1">
-                <div className="flex items-center gap-1.5 text-xs text-[#ffc61e] font-bold">
-                  <Layers className="w-4 h-4" /> Ligação
+                <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-bold uppercase tracking-wider">
+                  <Layers className="w-3.5 h-3.5 text-zinc-400" /> Rede / Ligação
                 </div>
-                <p className="text-base font-bold text-white">
+                <p className="text-base font-bold text-white pt-1">
                   {obra.tipo_ligacao || 'Não definida'}
                 </p>
               </div>
@@ -330,47 +312,47 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
 
             {/* Inversor */}
             <div className="space-y-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-[#ffc61e] uppercase tracking-wider">
-                <Cpu className="w-4 h-4" /> Inversor Solar
+              <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-300 uppercase tracking-wider">
+                <Cpu className="w-4 h-4 text-[#ffc61e]" /> Inversor Solar
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs bg-zinc-950/60 p-3 rounded-xl border border-zinc-800/80">
+              <div className="grid grid-cols-2 gap-2 text-xs bg-zinc-950/80 p-3.5 rounded-xl border border-zinc-800/90">
                 <div>
                   <span className="text-zinc-400 block font-medium">Marca</span>
-                  <span className="font-semibold text-zinc-200">{obra.inversor_marca}</span>
+                  <span className="font-semibold text-zinc-200">{obra.inversor_marca || '—'}</span>
                 </div>
                 <div>
                   <span className="text-zinc-400 block font-medium">Potência Inversor</span>
-                  <span className="font-semibold text-zinc-200">{obra.potencia_inversor_kw} kW</span>
+                  <span className="font-semibold text-zinc-200">{obra.potencia_inversor_kw ? `${obra.potencia_inversor_kw} kW` : '—'}</span>
                 </div>
-                <div className="col-span-2 pt-1 border-t border-zinc-800/50">
+                <div className="col-span-2 pt-2 border-t border-zinc-800/60">
                   <span className="text-zinc-400 block font-medium">Modelo</span>
-                  <span className="font-semibold text-zinc-200 break-words">{obra.inversor_modelo}</span>
+                  <span className="font-semibold text-zinc-200 break-words">{obra.inversor_modelo || '—'}</span>
                 </div>
               </div>
             </div>
 
             {/* Módulos */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs font-bold text-[#ffc61e] uppercase tracking-wider">
+              <div className="flex items-center justify-between text-xs font-bold text-zinc-300 uppercase tracking-wider">
                 <div className="flex items-center gap-1.5">
-                  <Zap className="w-4 h-4" /> Módulos Fotovoltaicos
+                  <Zap className="w-4 h-4 text-[#ffc61e]" /> Módulos Fotovoltaicos
                 </div>
-                <span className="text-[#ffc61e] font-mono font-bold bg-[#ffc61e]/15 px-2 py-0.5 rounded border border-[#ffc61e]/30">
+                <span className="text-[#ffc61e] font-mono font-bold bg-[#ffc61e]/15 px-2.5 py-0.5 rounded-md border border-[#ffc61e]/30">
                   {obra.qtd_modulos} placas
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs bg-zinc-950/60 p-3 rounded-xl border border-zinc-800/80">
+              <div className="grid grid-cols-2 gap-2 text-xs bg-zinc-950/80 p-3.5 rounded-xl border border-zinc-800/90">
                 <div>
                   <span className="text-zinc-400 block font-medium">Marca Placa</span>
-                  <span className="font-semibold text-zinc-200">{obra.modulos_marca}</span>
+                  <span className="font-semibold text-zinc-200">{obra.modulos_marca || '—'}</span>
                 </div>
                 <div>
                   <span className="text-zinc-400 block font-medium">Potência Unitária</span>
-                  <span className="font-semibold text-zinc-200">{obra.potencia_modulo_w} W</span>
+                  <span className="font-semibold text-zinc-200">{obra.potencia_modulo_w ? `${obra.potencia_modulo_w} W` : '—'}</span>
                 </div>
-                <div className="col-span-2 pt-1 border-t border-zinc-800/50">
+                <div className="col-span-2 pt-2 border-t border-zinc-800/60">
                   <span className="text-zinc-400 block font-medium">Modelo Placa</span>
-                  <span className="font-semibold text-zinc-200 break-words">{obra.modulos_modelo}</span>
+                  <span className="font-semibold text-zinc-200 break-words">{obra.modulos_modelo || '—'}</span>
                 </div>
               </div>
             </div>
@@ -381,118 +363,26 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
                 <span className="text-zinc-400 flex items-center gap-1 font-medium">
                   <Home className="w-3.5 h-3.5 text-zinc-400" /> Tipo Telhado
                 </span>
-                <span className="font-semibold text-zinc-200 block">{obra.tipo_telhado}</span>
+                <span className="font-semibold text-zinc-200 block">{obra.tipo_telhado || '—'}</span>
               </div>
               <div className="space-y-0.5">
                 <span className="text-zinc-400 flex items-center gap-1 font-medium">
                   <Calendar className="w-3.5 h-3.5 text-zinc-400" /> Data Status
                 </span>
-                <span className="font-semibold text-zinc-200 block">{obra.data_instalacao}</span>
+                <span className="font-semibold text-zinc-200 block">{obra.data_instalacao || '—'}</span>
               </div>
             </div>
           </Card>
         </section>
 
-        {/* BLOCO 3: Captura de Fotos Nativa & Pasta do Drive */}
+        {/* BLOCO 3: Galeria de Fotos Offline-First com Abas */}
         <section className="space-y-3">
-          <PhotoCapture obraId={obra.id_obra} />
-
-          {/* Pasta do Drive */}
-          <Card className="p-4 border-zinc-800 bg-zinc-900/90 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
-                <Folder className="w-4 h-4 text-[#ffc61e]" /> Pasta do Google Drive
-              </span>
-
-              {!isEditingDriveLink ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setIsEditingDriveLink(true)}
-                  className="h-8 text-xs text-[#ffc61e] hover:text-[#e5b010] p-1 font-semibold"
-                >
-                  <Edit3 className="w-3.5 h-3.5 mr-1" /> {obra.link_fotos ? 'Alterar Link' : 'Adicionar Link'}
-                </Button>
-              ) : null}
-            </div>
-
-            {directImageUrl && !isEditingDriveLink ? (
-              <div className="relative w-full h-48 rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={directImageUrl}
-                  alt={`Imagem da obra #${obra.id_obra}`}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            ) : null}
-
-            {isEditingDriveLink ? (
-              <div className="space-y-2">
-                <label className="text-xs text-zinc-400 font-medium">Cole o link da pasta ou arquivo do Google Drive:</label>
-                <div className="relative">
-                  <LinkIcon className="w-4 h-4 absolute left-3 top-3 text-zinc-500" />
-                  <Input
-                    type="url"
-                    placeholder="https://drive.google.com/drive/folders/..."
-                    value={driveLinkInput}
-                    onChange={(e) => setDriveLinkInput(e.target.value)}
-                    className="pl-9 bg-zinc-950 border-zinc-700 text-xs focus:ring-2 focus:ring-[#ffc61e] min-h-[44px]"
-                  />
-                </div>
-                <div className="flex justify-end gap-2 pt-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setIsEditingDriveLink(false)}
-                    disabled={updateDriveLinkMutation.isPending}
-                    className="h-8 text-xs min-h-[44px]"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSaveDriveLink}
-                    disabled={updateDriveLinkMutation.isPending}
-                    className="h-8 text-xs min-h-[44px]"
-                  >
-                    {updateDriveLinkMutation.isPending ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
-                    ) : (
-                      <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                    )}
-                    Salvar Link
-                  </Button>
-                </div>
-              </div>
-            ) : obra.link_fotos ? (
-              <a href={obra.link_fotos} target="_blank" rel="noopener noreferrer" className="block w-full">
-                <Button variant="secondary" className="w-full justify-between h-11 border border-zinc-700 bg-zinc-800/80 hover:bg-zinc-800">
-                  <span className="flex items-center gap-2 text-xs font-bold text-zinc-200 truncate pr-2">
-                    <Folder className="w-4 h-4 text-[#ffc61e] shrink-0" /> Abrir Pasta no Google Drive
-                  </span>
-                  <ExternalLink className="w-4 h-4 text-zinc-400 shrink-0" />
-                </Button>
-              </a>
-            ) : (
-              <div className="text-xs text-zinc-400 p-3 rounded-xl bg-zinc-950/40 border border-zinc-800/60 flex items-center justify-between">
-                <span>Nenhum link do Google Drive cadastrado.</span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setIsEditingDriveLink(true)}
-                  className="h-8 text-xs border-[#ffc61e]/40 text-[#ffc61e] min-h-[44px]"
-                >
-                  Adicionar
-                </Button>
-              </div>
-            )}
-          </Card>
+          <PhotoGallery obraId={obra.id_obra} />
 
           {/* Observações Editáveis */}
-          <Card className="p-4 border-zinc-800 bg-zinc-900/90 space-y-2">
+          <Card className="p-4 sm:p-5 border-zinc-800 bg-zinc-900/90 space-y-3 shadow-md">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
+              <span className="text-xs font-extrabold text-zinc-200 uppercase tracking-wider flex items-center gap-2">
                 <FileText className="w-4 h-4 text-[#ffc61e]" /> Observações de Campo
               </span>
 
@@ -501,29 +391,29 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
                   size="sm"
                   variant="ghost"
                   onClick={() => setIsEditingObs(true)}
-                  className="h-8 text-xs text-[#ffc61e] hover:text-[#e5b010] p-1 font-semibold"
+                  className="h-9 px-3 text-xs text-[#ffc61e] hover:text-[#e5b010] hover:bg-zinc-800 font-bold min-h-[44px]"
                 >
-                  <Edit3 className="w-3.5 h-3.5 mr-1" /> Editar
+                  <Edit3 className="w-3.5 h-3.5 mr-1.5" /> Editar
                 </Button>
               ) : null}
             </div>
 
             {isEditingObs ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <textarea
                   value={obsText}
                   onChange={(e) => setObsText(e.target.value)}
                   rows={4}
                   placeholder="Escreva anotações sobre o andamento da instalação..."
-                  className="w-full bg-zinc-950 border border-zinc-700 text-xs text-zinc-100 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#ffc61e]"
+                  className="w-full bg-zinc-950 border border-zinc-700 text-xs sm:text-sm text-zinc-100 rounded-xl p-3.5 focus:outline-none focus:ring-2 focus:ring-[#ffc61e]"
                 />
-                <div className="flex justify-end gap-2">
+                <div className="flex justify-end gap-2.5">
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => setIsEditingObs(false)}
                     disabled={updateObsMutation.isPending}
-                    className="h-8 text-xs min-h-[44px]"
+                    className="h-10 text-xs min-h-[48px] px-4 font-semibold"
                   >
                     Cancelar
                   </Button>
@@ -531,12 +421,12 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
                     size="sm"
                     onClick={handleSaveObs}
                     disabled={updateObsMutation.isPending}
-                    className="h-8 text-xs min-h-[44px]"
+                    className="h-10 text-xs min-h-[48px] px-5 bg-[#ffc61e] text-black hover:bg-[#e5b010] font-extrabold"
                   >
                     {updateObsMutation.isPending ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                      <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
                     ) : (
-                      <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                      <CheckCircle2 className="w-4 h-4 mr-1.5" />
                     )}
                     Salvar Observações
                   </Button>
@@ -544,7 +434,7 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
               </div>
             ) : (
               <div className="max-w-[65ch]">
-                <p className="text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap bg-zinc-950/60 p-3 rounded-xl border border-zinc-800/80 font-normal">
+                <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap bg-zinc-950/80 p-3.5 rounded-xl border border-zinc-800/90 font-normal">
                   {obra.observacoes || 'Nenhuma observação registrada.'}
                 </p>
               </div>
@@ -556,7 +446,7 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
       {/* Modal de Confirmação para Ligação Direta */}
       <Dialog open={callConfirmDialogOpen} onOpenChange={setCallConfirmDialogOpen}>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-emerald-400">
+          <DialogTitle className="flex items-center gap-2 text-emerald-400 text-base font-bold">
             <PhoneCall className="w-5 h-5" /> Confirmar Ligação
           </DialogTitle>
           <DialogDescription className="text-zinc-300 text-xs pt-1 leading-relaxed">
@@ -564,18 +454,18 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center justify-end gap-2 pt-4">
+        <div className="flex items-center justify-end gap-2.5 pt-4">
           <Button
             type="button"
             variant="outline"
             onClick={() => setCallConfirmDialogOpen(false)}
-            className="min-h-[44px]"
+            className="min-h-[48px] px-4"
           >
             Cancelar
           </Button>
           {obra.telefone && (
             <a href={`tel:${obra.telefone.replace(/\D/g, '')}`} onClick={() => setCallConfirmDialogOpen(false)}>
-              <Button type="button" className="bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold min-h-[44px]">
+              <Button type="button" className="bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold min-h-[48px] px-5">
                 <PhoneCall className="w-4 h-4 mr-1.5" /> Confirmar e Ligar
               </Button>
             </a>
@@ -585,3 +475,4 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
     </div>
   );
 }
+

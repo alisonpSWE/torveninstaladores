@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
-import { Obra } from '@/lib/supabase/types';
+import { Obra, ObraPhoto } from '@/lib/supabase/types';
 
 export interface UseObrasOptions {
   searchQuery?: string;
@@ -75,6 +75,48 @@ export function useObra(idObra: number | string) {
       return (data as Obra) || null;
     },
     enabled: !isNaN(numId) && numId > 0,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export interface ObraPhotosData {
+  registroPhotos: ObraPhoto[];
+  projetoPhotos: ObraPhoto[];
+  allPhotos: ObraPhoto[];
+}
+
+export function useObraPhotos(idObra: number | string) {
+  const supabase = createClient();
+  const numId = Number(idObra);
+
+  return useQuery<ObraPhotosData>({
+    queryKey: ['obra-photos', numId],
+    queryFn: async () => {
+      if (!numId || isNaN(numId)) {
+        return { registroPhotos: [], projetoPhotos: [], allPhotos: [] };
+      }
+      const { data, error } = await (supabase.from('obra_photos' as any) as any)
+        .select('*')
+        .eq('id_obra', numId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.warn(`[USE OBRA PHOTOS] Aviso ao buscar fotos da obra #${numId}:`, error.message);
+        return { registroPhotos: [], projetoPhotos: [], allPhotos: [] };
+      }
+
+      const allPhotos = (data || []) as ObraPhoto[];
+      const registroPhotos = allPhotos.filter(
+        (photo) => !photo.category || photo.category === 'registro'
+      );
+      const projetoPhotos = allPhotos.filter(
+        (photo) => photo.category === 'projeto'
+      );
+
+      return { registroPhotos, projetoPhotos, allPhotos };
+    },
+    enabled: !isNaN(numId) && numId > 0,
+    refetchInterval: 5000,
     refetchOnWindowFocus: true,
   });
 }

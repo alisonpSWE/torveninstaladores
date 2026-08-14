@@ -42,11 +42,11 @@ export function PhotoCapture({ obraId }: PhotoCaptureProps) {
 
       {/* Grid de Previews locais/offline */}
       {localPreviews.length > 0 && (
-        <div className="grid grid-cols-3 gap-2 pt-1">
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 pt-1">
           {localPreviews.map((prev) => (
             <div
               key={prev.id}
-              className="relative aspect-square rounded-xl overflow-hidden border border-[#ffc61e]/40 bg-zinc-950 group"
+              className="relative aspect-square rounded-xl overflow-hidden border-2 border-[#ffc61e] bg-zinc-950 shadow-md group"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -56,8 +56,8 @@ export function PhotoCapture({ obraId }: PhotoCaptureProps) {
                 decoding="async"
                 className="w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                <span className="text-xs font-extrabold text-black bg-[#ffc61e] px-2 py-0.5 rounded shadow">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end justify-center p-2">
+                <span className="text-[10px] font-extrabold text-black bg-[#ffc61e] px-2 py-0.5 rounded shadow">
                   Pendente
                 </span>
               </div>
@@ -68,7 +68,7 @@ export function PhotoCapture({ obraId }: PhotoCaptureProps) {
 
       {/* Botão para Acionar Câmera Nativa em Alto Contraste 14:1 */}
       <label htmlFor="camera-file-input" className="block w-full cursor-pointer">
-        <div className="w-full h-12 rounded-xl bg-[#ffc61e] hover:bg-[#e5b010] text-black font-extrabold text-sm flex items-center justify-center gap-2 shadow-md border border-[#ffc61e]/40 active:scale-[0.99] transition-all">
+        <div className="w-full h-12 sm:h-14 rounded-xl bg-[#ffc61e] hover:bg-[#e5b010] text-black font-extrabold text-sm sm:text-base flex items-center justify-center gap-2 shadow-md border border-[#ffc61e]/40 active:scale-[0.99] transition-all">
           <Camera className="w-5 h-5 stroke-[2.5]" />
           <span>Tirar Foto com a Câmera</span>
         </div>

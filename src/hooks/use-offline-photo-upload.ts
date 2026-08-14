@@ -1,114 +1,202 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import {
-  savePendingPhoto,
-  getPendingPhotos,
-  removePendingPhoto,
-  getPendingPhotoCount,
-  PendingPhoto,
-} from '@/lib/offline-photo-store';
+import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import { compressImage } from '@/lib/image-compressor';
+import {
+  savePhotoOffline,
+  getOfflinePhotosByObra,
+  removeOfflinePhoto,
+  updateOfflinePhotoStatus,
+  OfflinePhoto,
+} from '@/lib/offline-photo-store';
+
+export interface SyncResult {
+  syncedCount: number;
+  failedCount: number;
+  isOnline: boolean;
+}
 
 export function useOfflinePhotoUpload(obraId: number) {
+  const [isSyncing, setIsSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState<boolean>(
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
-  const [pendingCount, setPendingCount] = useState<number>(0);
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [localPreviews, setLocalPreviews] = useState<{ id: string; url: string }[]>([]);
+  const queryClient = useQueryClient();
+  const supabase = createClient();
 
-  const updatePendingCount = useCallback(async () => {
-    const photos = await getPendingPhotos();
-    const obraPhotos = photos.filter((p) => p.obraId === obraId);
-    setPendingCount(obraPhotos.length);
+  // Consulta reativa das fotos pendentes salvas no IndexedDB para a obra atual
+  const { data: pendingPhotos = [], refetch: refetchPending } = useQuery<OfflinePhoto[]>({
+    queryKey: ['offline-photos', Number(obraId)],
+    queryFn: async () => {
+      if (!obraId) return [];
+      return await getOfflinePhotosByObra(Number(obraId));
+    },
+    refetchInterval: 4000,
+  });
 
-    // Previews locais
-    const previews = obraPhotos.map((p) => ({
-      id: p.id,
-      url: URL.createObjectURL(p.blob),
-    }));
-    setLocalPreviews(previews);
-  }, [obraId]);
+  // Previews locais em Blob URLs para exibição imediata na galeria
+  const [localPreviews, setLocalPreviews] = useState<{ id: string; url: string; status: string }[]>([]);
 
-  // Upload em primeiro plano (iOS fallback ou gatilho online)
-  const processQueueInForeground = useCallback(async () => {
-    if (!navigator.onLine || isSyncing) return;
+  useEffect(() => {
+    if (pendingPhotos && pendingPhotos.length > 0) {
+      const previews = pendingPhotos.map((p) => ({
+        id: p.id,
+        url: URL.createObjectURL(p.file || p.blob),
+        status: p.status || 'pending',
+      }));
+      setLocalPreviews(previews);
 
-    const photos = await getPendingPhotos();
-    const obraPhotos = photos.filter((p) => p.obraId === obraId);
-    if (obraPhotos.length === 0) return;
+      return () => {
+        previews.forEach((prev) => URL.revokeObjectURL(prev.url));
+      };
+    } else {
+      setLocalPreviews([]);
+    }
+  }, [pendingPhotos]);
+
+  /**
+   * Captura, Comprime e Salva uma foto localmente no IndexedDB
+   */
+  const capturePhoto = useCallback(
+    async (file: File): Promise<OfflinePhoto | null> => {
+      if (!file || !obraId) return null;
+
+      try {
+        console.log(`[USE OFFLINE PHOTO] 📸 Capturando e comprimindo foto para Obra #${obraId}...`);
+        const compressedFile = await compressImage(file);
+        const offlineRecord = await savePhotoOffline(Number(obraId), compressedFile, file.name);
+
+        queryClient.invalidateQueries({ queryKey: ['offline-photos', Number(obraId)] });
+        refetchPending();
+
+        // Se estiver online, aciona a sincronização imediata em segundo plano
+        if (typeof navigator !== 'undefined' && navigator.onLine) {
+          setTimeout(() => {
+            syncOfflinePhotos();
+          }, 300);
+        }
+
+        return offlineRecord;
+      } catch (err: any) {
+        console.error('[USE OFFLINE PHOTO] Erro ao capturar foto:', err);
+        return null;
+      }
+    },
+    [obraId, queryClient, refetchPending]
+  );
+
+  /**
+   * FLUXO ESTRITO DE SINCRONIZAÇÃO OFFLINE-FIRST:
+   * 1. Verifica conectividade (se offline, aborta silenciosamente)
+   * 2. Busca fotos pendentes no IndexedDB
+   * 3. Para cada foto: Upload no Storage ➔ Resgate da URL Pública ➔ Insert na tabela obra_photos ➔ Limpeza do IndexedDB
+   * 4. Invalida as queries do TanStack para a UI atualizar instantaneamente
+   */
+  const syncOfflinePhotos = useCallback(async (): Promise<SyncResult> => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      console.log('[OFFLINE PHOTO SYNC] 📴 Dispositivo offline. Sincronização adiada.');
+      setIsOnline(false);
+      return { syncedCount: 0, failedCount: 0, isOnline: false };
+    }
+
+    setIsOnline(true);
+
+    const photosToUpload = await getOfflinePhotosByObra(Number(obraId));
+    if (!photosToUpload || photosToUpload.length === 0) {
+      return { syncedCount: 0, failedCount: 0, isOnline: true };
+    }
 
     setIsSyncing(true);
-    const supabase = createClient();
+    let syncedCount = 0;
+    let failedCount = 0;
 
-    for (const photo of obraPhotos) {
+    console.log(
+      `[OFFLINE PHOTO SYNC] 🚀 Iniciando sincronização de ${photosToUpload.length} foto(s) ` +
+      `para a Obra #${obraId}...`
+    );
+
+    for (const photo of photosToUpload) {
       try {
-        const { error } = await supabase.storage
-          .from(photo.bucket)
-          .upload(photo.storagePath, photo.blob, {
-            contentType: photo.contentType,
+        await updateOfflinePhotoStatus(photo.id, 'uploading');
+
+        const fileBlob = photo.file || photo.blob;
+        if (!fileBlob) {
+          console.warn(`[OFFLINE PHOTO SYNC] ⚠️ Foto #${photo.id} sem Blob válido. Deletando do IndexedDB.`);
+          await removeOfflinePhoto(photo.id);
+          continue;
+        }
+
+        const fileNameClean = (photo.fileName || `foto_${Date.now()}.jpg`).replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storagePath = photo.storagePath || `obra_${obraId}/${photo.timestamp || Date.now()}_${fileNameClean}`;
+
+        // 1. UPLOAD NO SUPABASE STORAGE (Bucket 'photos')
+        console.log(`[OFFLINE PHOTO SYNC] 📤 Enviando para Storage: ${storagePath}...`);
+        const { error: uploadError } = await supabase.storage
+          .from('photos')
+          .upload(storagePath, fileBlob, {
+            contentType: photo.contentType || 'image/jpeg',
             upsert: true,
           });
 
-        if (!error) {
-          await removePendingPhoto(photo.id);
+        if (uploadError) {
+          throw new Error(`Erro no Supabase Storage: ${uploadError.message}`);
         }
-      } catch (err) {
-        console.error('Erro ao enviar foto em primeiro plano:', photo.id, err);
+
+        // 2. RESGATE DA URL PÚBLICA
+        const { data: publicUrlData } = supabase.storage
+          .from('photos')
+          .getPublicUrl(storagePath);
+
+        const publicUrl = publicUrlData.publicUrl;
+
+        // 3. INSERÇÃO NA TABELA obra_photos NO SUPABASE
+        console.log(`[OFFLINE PHOTO SYNC] 💾 Registrando metadados na tabela obra_photos...`);
+        const insertPayload: any = {
+          id_obra: Number(obraId),
+          storage_path: storagePath,
+          public_url: publicUrl,
+          file_name: photo.fileName || fileNameClean,
+          content_type: photo.contentType || 'image/jpeg',
+          size_bytes: fileBlob.size || 0,
+        };
+
+        const { error: dbError } = await supabase
+          .from('obra_photos')
+          .insert(insertPayload);
+
+        if (dbError) {
+          throw new Error(`Erro na tabela obra_photos: ${dbError.message}`);
+        }
+
+        // 4. LIMPEZA DO INDEXEDDB (Somente após sucesso absoluto no DB)
+        await removeOfflinePhoto(photo.id);
+        syncedCount++;
+
+        console.log(`[OFFLINE PHOTO SYNC] ✅ Foto #${photo.id} sincronizada e removida do cache local!`);
+      } catch (err: any) {
+        failedCount++;
+        console.error(`[OFFLINE PHOTO SYNC] ❌ Falha no upload da foto #${photo.id}:`, err.message || err);
+        await updateOfflinePhotoStatus(photo.id, 'failed');
       }
     }
 
-    await updatePendingCount();
     setIsSyncing(false);
-  }, [isSyncing, obraId, updatePendingCount]);
 
-  // Salva no IndexedDB e dispara Background Sync ou Fallback Foreground
-  const capturePhoto = useCallback(
-    async (file: File, bucket: string = 'photos') => {
-      const timestamp = Date.now();
-      const storagePath = `obra_${obraId}/${timestamp}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    // 5. INVALIDAÇÃO DE QUERIES DO TANSTACK QUERY
+    queryClient.invalidateQueries({ queryKey: ['obra-photos', Number(obraId)] });
+    queryClient.invalidateQueries({ queryKey: ['offline-photos', Number(obraId)] });
+    refetchPending();
 
-      const pendingPhoto: PendingPhoto = {
-        id: `photo_${timestamp}_${Math.random().toString(36).substring(2, 7)}`,
-        blob: file,
-        fileName: file.name,
-        contentType: file.type || 'image/jpeg',
-        bucket,
-        storagePath,
-        obraId,
-        createdAt: timestamp,
-      };
+    return { syncedCount, failedCount, isOnline: true };
+  }, [obraId, queryClient, refetchPending, supabase]);
 
-      // 1. Salva no IndexedDB
-      await savePendingPhoto(pendingPhoto);
-      await updatePendingCount();
-
-      // 2. Tenta a Background Sync API (Android / Chromium)
-      if ('serviceWorker' in navigator && 'SyncManager' in window) {
-        try {
-          const registration = await navigator.serviceWorker.ready;
-          await (registration as any).sync.register('sync-photos');
-          return;
-        } catch (syncErr) {
-          console.warn('Background sync falhou, usando fallback em primeiro plano:', syncErr);
-        }
-      }
-
-      // 3. Fallback (iOS Safari / navegadores sem SyncManager)
-      if (navigator.onLine) {
-        await processQueueInForeground();
-      }
-    },
-    [obraId, processQueueInForeground, updatePendingCount]
-  );
-
+  // Listener de reconexão online e visibilidade de tela (Background Sync Fallback)
   useEffect(() => {
-    updatePendingCount();
-
     const handleOnline = () => {
       setIsOnline(true);
-      processQueueInForeground();
+      syncOfflinePhotos();
     };
 
     const handleOffline = () => {
@@ -117,7 +205,7 @@ export function useOfflinePhotoUpload(obraId: number) {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && navigator.onLine) {
-        processQueueInForeground();
+        syncOfflinePhotos();
       }
     };
 
@@ -132,14 +220,16 @@ export function useOfflinePhotoUpload(obraId: number) {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleVisibilityChange);
     };
-  }, [processQueueInForeground, updatePendingCount]);
+  }, [syncOfflinePhotos]);
 
   return {
     capturePhoto,
-    pendingCount,
+    syncOfflinePhotos,
+    processQueueInForeground: syncOfflinePhotos, // Alias para retrocompatibilidade
+    pendingCount: pendingPhotos.length,
+    pendingPhotos,
+    localPreviews,
     isOnline,
     isSyncing,
-    localPreviews,
-    processQueueInForeground,
   };
 }

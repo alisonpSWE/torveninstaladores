@@ -103,7 +103,7 @@ export function ObrasListPage() {
               disabled={mounted ? isFetching : false}
               title="Atualizar lista"
               aria-label="Atualizar lista de obras"
-              className="rounded-xl border border-zinc-800 bg-zinc-900/60 min-h-[44px] min-w-[44px]"
+              className="rounded-xl border border-zinc-800 bg-zinc-900/60 min-h-[48px] min-w-[48px] hover:bg-zinc-800 transition-colors"
             >
               <RefreshCw className={`w-4 h-4 text-zinc-400 ${mounted && isFetching ? 'animate-spin text-[#ffc61e]' : ''}`} />
             </Button>
@@ -123,7 +123,7 @@ export function ObrasListPage() {
             {search && (
               <button
                 onClick={() => setSearch('')}
-                className="absolute right-3 top-2.5 text-xs text-[#ffc61e] bg-zinc-800 hover:bg-zinc-700 px-2 py-1 rounded-md font-semibold transition-colors min-h-[36px] flex items-center"
+                className="absolute right-2 top-1.5 text-xs text-[#ffc61e] bg-zinc-800 hover:bg-zinc-700 px-3 min-h-[36px] h-[36px] rounded-lg font-semibold transition-colors flex items-center justify-center min-w-[44px]"
                 title="Limpar busca"
                 aria-label="Limpar busca"
               >
@@ -135,11 +135,11 @@ export function ObrasListPage() {
       </header>
 
       {/* Conteúdo Principal */}
-      <main className="flex-1 p-4 max-w-3xl mx-auto w-full space-y-3">
+      <main className="flex-1 p-4 max-w-3xl mx-auto w-full space-y-4">
         {!mounted || isLoading ? (
-          <div className="space-y-3 pt-2">
+          <div className="space-y-3.5 pt-1">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-32 rounded-xl bg-zinc-900/60 border border-zinc-800/60 animate-pulse p-4 space-y-3">
+              <div key={i} className="h-36 rounded-xl bg-zinc-900/60 border border-zinc-800/60 animate-pulse p-4 space-y-3">
                 <div className="flex justify-between">
                   <div className="h-4 w-24 bg-zinc-800 rounded"></div>
                   <div className="h-6 w-16 bg-zinc-800 rounded-full"></div>
@@ -150,13 +150,13 @@ export function ObrasListPage() {
             ))}
           </div>
         ) : obras && obras.length > 0 ? (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs text-zinc-400 px-1">
+          <div className="space-y-3.5">
+            <div className="flex items-center justify-between text-xs text-zinc-400 px-1 font-medium">
               <span>
                 {obras.length} {obras.length === 1 ? 'obra encontrada' : 'obras encontradas'}
               </span>
             </div>
-            <div className="space-y-3">
+            <div className="flex flex-col space-y-3.5">
               {obras.map((obra) => (
                 <ObraCard key={obra.id_obra} obra={obra} />
               ))}
@@ -178,7 +178,7 @@ export function ObrasListPage() {
               </p>
             </div>
             {!search && (
-              <Button onClick={() => setImportDialogOpen(true)} variant="default" size="sm" className="min-h-[44px]">
+              <Button onClick={() => setImportDialogOpen(true)} variant="default" size="sm" className="min-h-[48px] px-5">
                 <Plus className="w-4 h-4 mr-1.5" /> Importar Obra(s)
               </Button>
             )}

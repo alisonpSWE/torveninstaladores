@@ -24,6 +24,18 @@ export interface Obra {
   link_fotos: string;
 }
 
+export interface ObraPhoto {
+  id: string;
+  created_at: string;
+  id_obra: number;
+  storage_path: string;
+  file_name?: string;
+  content_type?: string;
+  size_bytes?: number;
+  public_url: string;
+  category?: 'registro' | 'projeto' | string;
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -31,6 +43,11 @@ export type Database = {
         Row: Obra;
         Insert: Omit<Obra, 'id' | 'created_at'>;
         Update: Partial<Omit<Obra, 'id' | 'created_at'>>;
+      };
+      obra_photos: {
+        Row: ObraPhoto;
+        Insert: Omit<ObraPhoto, 'id' | 'created_at'>;
+        Update: Partial<Omit<ObraPhoto, 'id' | 'created_at'>>;
       };
     };
   };

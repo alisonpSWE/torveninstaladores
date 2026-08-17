@@ -1,3 +1,13 @@
+export type AppRole = 'instalador' | 'escritorio' | 'admin';
+
+export interface Perfil {
+  id: string;
+  email: string;
+  nome_completo?: string | null;
+  role: AppRole;
+  created_at?: string;
+}
+
 export interface Obra {
   id?: string;
   created_at?: string;
@@ -24,6 +34,21 @@ export interface Obra {
   link_fotos: string;
 }
 
+export const PROJECT_SUBCATEGORIES = [
+  { id: 'fachada', label: 'Fachada', icon: '📸', appSheetField: 'CampoFotodafachadaProjeto' },
+  { id: 'padrao_entrada', label: 'Padrão de Entrada', icon: '⚡', appSheetField: 'CampoFotodopadrodeentradaProjeto' },
+  { id: 'medidor', label: 'Medidor', icon: '📊', appSheetField: 'CampoFotodomedidorProjeto' },
+  { id: 'disjuntor_geral', label: 'Disjuntor Geral', icon: '🔌', appSheetField: 'CampoFotododisjuntorgeralProjeto' },
+  { id: 'qdc', label: 'QDC', icon: '📦', appSheetField: 'CampoFotodoQDCProjeto' },
+  { id: 'ramal_entrada', label: 'Ramal de Entrada', icon: '🔗', appSheetField: 'CampoFotodoramaldeentradaProjeto' },
+  { id: 'local_inversor', label: 'Local do Inversor', icon: '📍', appSheetField: 'CampoFotodolocaldoinversorProjeto' },
+  { id: 'telhado', label: 'Telhado', icon: '🏠', appSheetField: 'CampoFotosdotelhadoProjeto' },
+  { id: 'drone', label: 'Drone', icon: '🚁', appSheetField: 'CampoFotosdedroneProjeto' },
+  { id: 'geral', label: 'Geral', icon: '📁', appSheetField: '' },
+] as const;
+
+export type ProjectSubcategoryId = typeof PROJECT_SUBCATEGORIES[number]['id'];
+
 export interface ObraPhoto {
   id: string;
   created_at: string;
@@ -34,11 +59,17 @@ export interface ObraPhoto {
   size_bytes?: number;
   public_url: string;
   category?: 'registro' | 'projeto' | string;
+  subcategory?: ProjectSubcategoryId | string;
 }
 
 export type Database = {
   public: {
     Tables: {
+      perfis: {
+        Row: Perfil;
+        Insert: Omit<Perfil, 'created_at'>;
+        Update: Partial<Omit<Perfil, 'id' | 'created_at'>>;
+      };
       obras: {
         Row: Obra;
         Insert: Omit<Obra, 'id' | 'created_at'>;

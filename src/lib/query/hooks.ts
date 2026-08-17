@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
-import { Obra, ObraPhoto } from '@/lib/supabase/types';
+import { Obra, ObraPhoto, Perfil } from '@/lib/supabase/types';
+import { deleteObraPhoto, DeletePhotoParams } from '@/lib/actions/delete-photo';
 
 export interface UseObrasOptions {
   searchQuery?: string;
@@ -55,6 +56,31 @@ export function useObras(options: UseObrasOptions | string = '') {
   });
 }
 
+export function usePerfil() {
+  const supabase = createClient();
+
+  return useQuery<Perfil | null>({
+    queryKey: ['user-perfil'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
+      const { data, error } = await (supabase.from('perfis' as any) as any)
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (error) {
+        console.warn('[USE PERFIL] Perfil não encontrado:', error.message);
+        return null;
+      }
+
+      return data as Perfil;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
 export function useObra(idObra: number | string) {
   const supabase = createClient();
   const numId = Number(idObra);
@@ -82,6 +108,7 @@ export function useObra(idObra: number | string) {
 export interface ObraPhotosData {
   registroPhotos: ObraPhoto[];
   projetoPhotos: ObraPhoto[];
+  projetoPhotosBySubcategory: Record<string, ObraPhoto[]>;
   allPhotos: ObraPhoto[];
 }
 
@@ -93,7 +120,7 @@ export function useObraPhotos(idObra: number | string) {
     queryKey: ['obra-photos', numId],
     queryFn: async () => {
       if (!numId || isNaN(numId)) {
-        return { registroPhotos: [], projetoPhotos: [], allPhotos: [] };
+        return { registroPhotos: [], projetoPhotos: [], projetoPhotosBySubcategory: {}, allPhotos: [] };
       }
       const { data, error } = await (supabase.from('obra_photos' as any) as any)
         .select('*')
@@ -102,7 +129,7 @@ export function useObraPhotos(idObra: number | string) {
 
       if (error) {
         console.warn(`[USE OBRA PHOTOS] Aviso ao buscar fotos da obra #${numId}:`, error.message);
-        return { registroPhotos: [], projetoPhotos: [], allPhotos: [] };
+        return { registroPhotos: [], projetoPhotos: [], projetoPhotosBySubcategory: {}, allPhotos: [] };
       }
 
       const allPhotos = (data || []) as ObraPhoto[];
@@ -113,11 +140,38 @@ export function useObraPhotos(idObra: number | string) {
         (photo) => photo.category === 'projeto'
       );
 
-      return { registroPhotos, projetoPhotos, allPhotos };
+      const projetoPhotosBySubcategory: Record<string, ObraPhoto[]> = {};
+      for (const photo of projetoPhotos) {
+        const subcat = photo.subcategory || 'geral';
+        if (!projetoPhotosBySubcategory[subcat]) {
+          projetoPhotosBySubcategory[subcat] = [];
+        }
+        projetoPhotosBySubcategory[subcat].push(photo);
+      }
+
+      return { registroPhotos, projetoPhotos, projetoPhotosBySubcategory, allPhotos };
     },
     enabled: !isNaN(numId) && numId > 0,
     refetchInterval: 5000,
     refetchOnWindowFocus: true,
+  });
+}
+
+export function useDeletePhoto() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: DeletePhotoParams) => {
+      const result = await deleteObraPhoto(params);
+      if (!result.success) {
+        throw new Error(result.error || 'Falha ao excluir foto.');
+      }
+      return params;
+    },
+    onSuccess: (params) => {
+      queryClient.invalidateQueries({ queryKey: ['obra-photos', Number(params.idObra)] });
+      queryClient.invalidateQueries({ queryKey: ['obra-photos-projeto', Number(params.idObra)] });
+    },
   });
 }
 

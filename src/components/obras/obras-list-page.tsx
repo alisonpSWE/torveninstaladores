@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useObras, useImportObra } from '@/lib/query/hooks';
+import { useObras, useImportObra, usePerfil } from '@/lib/query/hooks';
 import { ObraCard } from './obra-card';
 import { NetworkStatus } from '@/components/network-status';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Search, RefreshCw, Plus, Sun, AlertCircle, CheckCircle2, Loader2, Layers } from 'lucide-react';
+import { Search, RefreshCw, Plus, Sun, AlertCircle, CheckCircle2, Loader2, Layers, Shield } from 'lucide-react';
 
 export function ObrasListPage() {
   const [mounted, setMounted] = useState(false);
@@ -23,6 +23,8 @@ export function ObrasListPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const { data: perfil } = usePerfil();
 
   const { data: obras, isLoading, isFetching, refetch } = useObras({
     searchQuery: search,
@@ -71,7 +73,6 @@ export function ObrasListPage() {
 
       setIdsToImport('');
       refetch();
-      // Retained diagnostics feedback for technician inspection; user manually closes dialog.
     } catch (err: any) {
       setFeedback({ type: 'error', message: err.message || 'Erro de conexão ao importar obras.' });
     }
@@ -90,9 +91,17 @@ export function ObrasListPage() {
               <div className="w-10 h-10 rounded-xl bg-[#ffc61e] flex items-center justify-center border border-[#ffc61e]/40 shadow-sm">
                 <Sun className="w-6 h-6 text-black stroke-[2.5]" />
               </div>
-              <div>
-                <h1 className="text-lg font-bold text-white leading-tight tracking-tight">TORVEN</h1>
-                <p className="text-xs text-[#ffc61e] font-extrabold tracking-widest uppercase">Instaladores</p>
+              <div className="flex items-center gap-2">
+                <div>
+                  <h1 className="text-lg font-bold text-white leading-tight tracking-tight">TORVEN</h1>
+                  <p className="text-xs text-[#ffc61e] font-extrabold tracking-widest uppercase">Instaladores</p>
+                </div>
+                {/* Pill ADMIN para a role admin */}
+                {perfil?.role === 'admin' && (
+                  <span className="text-[10px] font-extrabold font-mono uppercase bg-[#ffc61e]/20 text-[#ffc61e] border border-[#ffc61e]/50 px-2.5 py-0.5 rounded-full tracking-wider shadow-sm flex items-center gap-1 ml-1">
+                    <Shield className="w-3 h-3 text-[#ffc61e]" /> ADMIN
+                  </span>
+                )}
               </div>
             </div>
 

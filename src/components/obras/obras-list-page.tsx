@@ -1,13 +1,24 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useObras, useImportObra, usePerfil } from '@/lib/query/hooks';
+import { useObras, usePerfil } from '@/lib/query/hooks';
+import { usePendingPhotosSummary } from '@/lib/sync-engine';
 import { ObraCard } from './obra-card';
 import { NetworkStatus } from '@/components/network-status';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Search, RefreshCw, Plus, Sun, AlertCircle, CheckCircle2, Loader2, Layers, Shield, Filter } from 'lucide-react';
+import {
+  Search,
+  RefreshCw,
+  Plus,
+  Sun,
+  Shield,
+  UploadCloud,
+  AlertTriangle,
+  Loader2,
+  WifiOff,
+} from 'lucide-react';
 
 export function ObrasListPage() {
   const [mounted, setMounted] = useState(false);
@@ -15,6 +26,7 @@ export function ObrasListPage() {
   const [adminTab, setAdminTab] = useState<'em_andamento' | 'todas'>('em_andamento');
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [idsToImport, setIdsToImport] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error';
     message: string;
@@ -28,6 +40,9 @@ export function ObrasListPage() {
   const { data: perfil } = usePerfil();
   const isAdmin = perfil?.role === 'admin';
 
+  // Monitor reativo de fotos salvas no IndexedDB local
+  const { totalPending, pendingByObra, isSyncing, isOnline, syncAll } = usePendingPhotosSummary();
+
   // Se não for admin, ou se a aba 'em_andamento' estiver ativa, oculta 'Vistoria Solicitada'
   const shouldExcludeVistoria = !isAdmin || adminTab === 'em_andamento';
 
@@ -35,8 +50,6 @@ export function ObrasListPage() {
     searchQuery: search,
     excludeStatus: shouldExcludeVistoria ? 'Vistoria Solicitada' : undefined,
   });
-
-  const importMutation = useImportObra();
 
   const handleBatchImport = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,6 +66,8 @@ export function ObrasListPage() {
       setFeedback({ type: 'error', message: 'Digite um ou mais IDs numéricos válidos (ex: 462, 463).' });
       return;
     }
+
+    setIsImporting(true);
 
     try {
       const response = await fetch('/api/import-obra', {
@@ -84,6 +99,8 @@ export function ObrasListPage() {
       refetch();
     } catch (err: any) {
       setFeedback({ type: 'error', message: err.message || 'Erro de conexão ao importar obras.' });
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -187,6 +204,83 @@ export function ObrasListPage() {
 
       {/* Conteúdo Principal */}
       <main className="flex-1 p-4 max-w-3xl mx-auto w-full space-y-4">
+        {/* Banner Informativo de Fotos Pendentes no Celular (Polished Alert Banner) */}
+        {totalPending > 0 && (
+          <div
+            role="status"
+            aria-live="polite"
+            className={`p-4 rounded-2xl border shadow-xl transition-all duration-300 ${
+              !isOnline
+                ? 'bg-amber-950/40 border-amber-500/40 text-amber-200 shadow-amber-950/20'
+                : isSyncing
+                ? 'bg-zinc-950 border-[#ffc61e]/50 text-white shadow-[#ffc61e]/10'
+                : 'bg-zinc-950 border-[#ffc61e]/60 text-zinc-100 shadow-black/40'
+            }`}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+              <div className="flex items-start sm:items-center gap-3 min-w-0">
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                    !isOnline
+                      ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                      : isSyncing
+                      ? 'bg-[#ffc61e]/20 border-[#ffc61e]/40 text-[#ffc61e]'
+                      : 'bg-[#ffc61e]/15 border-[#ffc61e]/30 text-[#ffc61e]'
+                  }`}
+                >
+                  {!isOnline ? (
+                    <WifiOff className="w-5 h-5 text-amber-400" aria-hidden="true" />
+                  ) : isSyncing ? (
+                    <Loader2 className="w-5 h-5 text-[#ffc61e] animate-spin" aria-hidden="true" />
+                  ) : (
+                    <UploadCloud className="w-5 h-5 text-[#ffc61e]" aria-hidden="true" />
+                  )}
+                </div>
+
+                <div className="space-y-0.5 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xs sm:text-sm font-extrabold text-white leading-tight">
+                      {!isOnline
+                        ? 'Modo Offline • Fotos Salvas no Dispositivo'
+                        : isSyncing
+                        ? 'Sincronizando com a Nuvem...'
+                        : 'Fotos de Campo Prontas para Envio'}
+                    </h3>
+                    <span
+                      className={`text-xs font-mono font-extrabold px-2 py-0.5 rounded-full border ${
+                        !isOnline
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                          : 'bg-[#ffc61e]/20 text-[#ffc61e] border-[#ffc61e]/50'
+                      }`}
+                    >
+                      {totalPending} {totalPending === 1 ? 'registro' : 'registros'}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-zinc-400 leading-normal">
+                    {!isOnline
+                      ? 'O envio automático iniciará assim que o celular recuperar o sinal de internet.'
+                      : isSyncing
+                      ? 'Fazendo upload seguro e comprimido para o servidor da Torven.'
+                      : 'Conexão ativa detectada. Envie os registros para atualizar o escritório.'}
+                  </p>
+                </div>
+              </div>
+
+              {isOnline && !isSyncing && (
+                <Button
+                  size="sm"
+                  onClick={() => syncAll()}
+                  className="min-h-[44px] h-11 px-4 bg-[#ffc61e] hover:bg-[#e5b010] text-black font-extrabold text-xs rounded-xl shadow-md border border-[#ffc61e]/40 transition-all flex items-center justify-center gap-2 shrink-0 self-stretch sm:self-auto active:scale-[0.98]"
+                >
+                  <UploadCloud className="w-4 h-4 text-black stroke-[2.4]" aria-hidden="true" />
+                  <span>Sincronizar Agora</span>
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
         {!mounted || isLoading ? (
           <div className="space-y-3.5 pt-1">
             {[1, 2, 3, 4].map((i) => (
@@ -210,7 +304,11 @@ export function ObrasListPage() {
             </div>
             <div className="flex flex-col space-y-3.5">
               {obras.map((obra) => (
-                <ObraCard key={obra.id_obra} obra={obra} />
+                <ObraCard
+                  key={obra.id_obra}
+                  obra={obra}
+                  pendingPhotosCount={pendingByObra[obra.id_obra] || 0}
+                />
               ))}
             </div>
           </div>
@@ -258,73 +356,64 @@ export function ObrasListPage() {
         <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Layers className="w-5 h-5 text-[#ffc61e]" /> Importar Obra(s) do CRM Groner
+              <Plus className="w-5 h-5 text-[#ffc61e]" />
+              <span>Importar Obra(s) do Groner</span>
             </DialogTitle>
             <DialogDescription>
-              Digite um ou múltiplos IDs numéricos do Groner separados por vírgula (ex: 342, 462, 463).
+              Digite os IDs das obras separados por vírgula, espaço ou quebra de linha.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleBatchImport} className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-300">IDs das Obras (Groner)</label>
+          <form onSubmit={handleBatchImport} className="space-y-4 mt-2">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-300">IDs das Obras no Groner</label>
               <textarea
-                rows={3}
-                placeholder="Ex: 342, 462, 463"
                 value={idsToImport}
                 onChange={(e) => setIdsToImport(e.target.value)}
-                disabled={importMutation.isPending}
-                className="w-full bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#ffc61e] font-mono"
+                placeholder="Exemplo: 462, 463, 464"
+                rows={4}
+                className="w-full rounded-xl bg-zinc-950 border border-zinc-800 p-3 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#ffc61e]"
+                disabled={isImporting}
               />
             </div>
 
             {feedback && (
               <div
-                className={`p-3 rounded-xl text-xs space-y-1 border ${
+                className={`p-3 rounded-xl text-xs font-bold ${
                   feedback.type === 'success'
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                    : 'bg-red-500/10 border-red-500/30 text-red-400'
+                    ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
+                    : 'bg-red-500/10 border border-red-500/30 text-red-400'
                 }`}
               >
-                <div className="flex items-center gap-2 font-bold">
-                  {feedback.type === 'success' ? (
-                    <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                  )}
-                  <span>{feedback.message}</span>
-                </div>
-
+                <p>{feedback.message}</p>
                 {feedback.errors && feedback.errors.length > 0 && (
-                  <div className="text-xs pt-1 text-red-300 space-y-0.5 border-t border-red-500/20">
-                    {feedback.errors.map((err, idx) => (
-                      <div key={idx}>
-                        • Obra #{err.id}: {err.message}
-                      </div>
+                  <ul className="mt-1.5 list-disc list-inside space-y-0.5 text-xs text-zinc-300">
+                    {feedback.errors.map((err) => (
+                      <li key={err.id}>
+                        Obra #{err.id}: {err.message}
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 )}
               </div>
             )}
 
-            <div className="flex items-center justify-end gap-2 pt-2">
+            <div className="flex justify-end gap-2 pt-2">
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 onClick={() => setImportDialogOpen(false)}
-                disabled={importMutation.isPending}
+                disabled={isImporting}
                 className="min-h-[44px]"
               >
-                {feedback?.type === 'success' ? 'Fechar' : 'Cancelar'}
+                Cancelar
               </Button>
-              <Button type="submit" disabled={importMutation.isPending} className="min-h-[44px]">
-                {importMutation.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Importando...
-                  </>
-                ) : (
-                  'Importar Obra(s)'
-                )}
+              <Button
+                type="submit"
+                disabled={isImporting}
+                className="bg-[#ffc61e] text-black hover:bg-[#e5b010] font-extrabold min-h-[44px]"
+              >
+                {isImporting ? 'Importando...' : 'Iniciar Importação'}
               </Button>
             </div>
           </form>

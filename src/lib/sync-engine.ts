@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import {
   getAllOfflinePhotos,
@@ -47,9 +48,19 @@ class CentralSyncEngine {
         }
       });
 
+      // Listener de foco na janela
       window.addEventListener('focus', () => {
         if (navigator.onLine) {
           this.scheduleStabilizedSync(500);
+        }
+      });
+
+      // Proteção contra fechamento acidental da aba durante uploads ativos
+      window.addEventListener('beforeunload', (e) => {
+        if (this.isSyncing) {
+          e.preventDefault();
+          e.returnValue = 'Há fotos sendo enviadas para a nuvem. Deseja realmente sair?';
+          return e.returnValue;
         }
       });
     }
@@ -147,6 +158,11 @@ class CentralSyncEngine {
         options.queryClient.invalidateQueries({ queryKey: ['obra-photos'] });
         options.queryClient.invalidateQueries({ queryKey: ['offline-photos'] });
       }
+
+      // Dispara evento customizado para reatividade global
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('torven-sync-completed', { detail: { syncedCount, failedCount } }));
+      }
     } catch (globalErr: any) {
       console.error('[SYNC ENGINE] ❌ Erro fatal no motor de sincronização:', globalErr);
     } finally {
@@ -174,7 +190,7 @@ class CentralSyncEngine {
     maxRetries: number = 3
   ): Promise<boolean> {
     const rawBlob = photo.file || photo.blob;
-    if (!rawBlob || rawBlob.size === 0) {
+    if ((!rawBlob || rawBlob.size === 0) && (!photo.buffer || photo.buffer.byteLength === 0)) {
       console.error(`[SYNC ENGINE] ⚠️ Foto #${photo.id} com buffer vazio. Descartando.`);
       await removeOfflinePhoto(photo.id);
       return false;
@@ -249,7 +265,6 @@ class CentralSyncEngine {
         );
 
         if (attempt < maxRetries) {
-          // Backoff progressivo (800ms, 2000ms)
           const delay = attempt * 1000;
           await new Promise((resolve) => setTimeout(resolve, delay));
         } else {
@@ -265,3 +280,76 @@ class CentralSyncEngine {
 
 // Singleton global exportado para toda a aplicação
 export const syncEngine = new CentralSyncEngine();
+
+/**
+ * Hook Reativo para obter o resumo de fotos offline em toda a aplicação
+ */
+export function usePendingPhotosSummary() {
+  const [totalPending, setTotalPending] = useState<number>(0);
+  const [pendingByObra, setPendingByObra] = useState<Record<number, number>>({});
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [isOnline, setIsOnline] = useState<boolean>(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+
+  const refreshSummary = useCallback(async () => {
+    try {
+      const allPhotos = await getAllOfflinePhotos();
+      setTotalPending(allPhotos.length);
+      const byObra: Record<number, number> = {};
+      for (const p of allPhotos) {
+        const id = Number(p.id_obra || p.obraId || 0);
+        if (id) byObra[id] = (byObra[id] || 0) + 1;
+      }
+      setPendingByObra(byObra);
+    } catch {
+      // Ignora erro de leitura em SSR
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshSummary();
+
+    const unsubscribe = syncEngine.subscribe((state) => {
+      setIsSyncing(state.isSyncing);
+      refreshSummary();
+    });
+
+    const interval = setInterval(refreshSummary, 3000);
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      refreshSummary();
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      refreshSummary();
+    };
+
+    const handleCustomSync = () => {
+      refreshSummary();
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('torven-sync-completed', handleCustomSync);
+
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('torven-sync-completed', handleCustomSync);
+    };
+  }, [refreshSummary]);
+
+  return {
+    totalPending,
+    pendingByObra,
+    isSyncing,
+    isOnline,
+    syncAll: () => syncEngine.syncAllPendingPhotos(),
+    refetch: refreshSummary,
+  };
+}

@@ -46,18 +46,39 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  // Verifica a sessão atual do usuário no Supabase Auth
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Verifica a sessão atual do usuário no Supabase Auth com resiliência offline
+  let user = null;
+  let authError = null;
 
-  // 1. Usuário ANÔNIMO tentando acessar rota protegida ➔ Redireciona para /login
-  if (!user && !isLoginPage) {
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (!error && data?.user) {
+      user = data.user;
+    } else {
+      authError = error;
+    }
+  } catch (err: any) {
+    authError = err;
+  }
+
+  // Detecção de Cookies de Sessão do Supabase (Offline Resilient)
+  const allCookies = request.cookies.getAll();
+  const hasAuthCookie = allCookies.some((c) =>
+    c.name.startsWith('sb-') &&
+    (c.name.includes('-auth-token') || c.name.endsWith('-access-token') || c.name.endsWith('-refresh-token'))
+  );
+
+  // Se o usuário está autenticado na rede OU possui cookies válidos em modo offline:
+  // NÃO redireciona para /login para permitir que o Service Worker sirva a aplicação a partir do cache
+  const isConsideredAuthenticated = user !== null || (hasAuthCookie && authError !== null);
+
+  // 1. Usuário sem sessão tentando acessar rota protegida ➔ Redireciona para /login
+  if (!isConsideredAuthenticated && !isLoginPage) {
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);
   }
 
-  // 2. Usuário AUTENTICADO tentando acessar /login ➔ Redireciona para a raiz /
+  // 2. Usuário com sessão ativa tentando acessar /login ➔ Redireciona para a raiz /
   if (user && isLoginPage) {
     const homeUrl = new URL('/', request.url);
     return NextResponse.redirect(homeUrl);

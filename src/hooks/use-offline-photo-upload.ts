@@ -9,6 +9,7 @@ import {
   getOfflinePhotosByObra,
   removeOfflinePhoto,
   updateOfflinePhotoStatus,
+  createRehydratedFile,
   OfflinePhoto,
 } from '@/lib/offline-photo-store';
 
@@ -129,13 +130,9 @@ export function useOfflinePhotoUpload(obraId: number) {
           continue;
         }
 
-        // 2. REIDRATAÇÃO DO BLOB EM UM NOVO OBJETO FILE (Evita 'No content provided' no SDK Supabase)
-        const fileNameClean = (photo.fileName || `foto_${Date.now()}.jpg`).replace(/[^a-zA-Z0-9._-]/g, '_');
-        const safeFile = new File([rawBlob], fileNameClean, {
-          type: photo.contentType || 'image/jpeg',
-        });
-
-        const storagePath = photo.storagePath || `obra_${obraId}/${photo.timestamp || Date.now()}_${fileNameClean}`;
+        // 2. REIDRATAÇÃO SEGURA DO BLOB VIA HELPER COM ISOLAMENTO DE BUFFER
+        const safeFile = createRehydratedFile(photo);
+        const storagePath = photo.storagePath || `obra_${obraId}/${photo.timestamp || Date.now()}_${safeFile.name}`;
 
         // 3. UPLOAD NO SUPABASE STORAGE PASSANDO O safeFile REIDRATADO
         console.log(`[OFFLINE PHOTO SYNC] 📤 Enviando arquivo reidratado (${safeFile.size} bytes) para Storage: ${storagePath}...`);
@@ -163,10 +160,11 @@ export function useOfflinePhotoUpload(obraId: number) {
           id_obra: Number(obraId),
           storage_path: storagePath,
           public_url: publicUrl,
-          file_name: photo.fileName || fileNameClean,
+          file_name: safeFile.name,
           content_type: safeFile.type,
           size_bytes: safeFile.size,
           category: (photo as any).category || 'registro',
+          subcategory: (photo as any).subcategory || 'geral',
         };
 
         const { error: dbError } = await supabase

@@ -8,11 +8,13 @@ import Lightbox from 'yet-another-react-lightbox';
 import 'yet-another-react-lightbox/styles.css';
 import { useObra, useObraPhotos, useDeletePhoto } from '@/lib/query/hooks';
 import { PROJECT_SUBCATEGORIES, ProjectSubcategoryId, ObraPhoto } from '@/lib/supabase/types';
+import { CategoryIcon } from './category-icon';
 import { compressImage } from '@/lib/image-compressor';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   ArrowLeft,
   UploadCloud,
@@ -30,12 +32,13 @@ import {
   Tag,
   GripVertical,
   Filter,
+  AlertTriangle,
 } from 'lucide-react';
 
 export interface CustomTag {
   id: string;
   label: string;
-  icon: string;
+  icon?: string;
   appSheetField?: string;
   isCustom?: boolean;
 }
@@ -81,7 +84,9 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
     stage: 'compressing' | 'uploading' | 'saving';
   } | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
+  const [photoToDelete, setPhotoToDelete] = useState<ObraPhoto | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
   const [updatingPhotoId, setUpdatingPhotoId] = useState<string | null>(null);
 
   // Lightbox
@@ -104,14 +109,14 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
     if (!slugId) return;
 
     if (tags.some((t) => t.id === slugId)) {
-      alert(`A tag "${trimmed}" já existe.`);
+      setFeedback({ type: 'error', message: `A tag "${trimmed}" já existe.` });
       return;
     }
 
     const newTag: CustomTag = {
       id: slugId,
       label: trimmed,
-      icon: '🏷️',
+      icon: 'Tag',
       isCustom: true,
     };
 
@@ -122,7 +127,7 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
   // Remove tag da barra lateral
   const handleRemoveTag = (tagId: string) => {
     if (tagId === 'geral') {
-      alert('A tag "Geral" é obrigatória e não pode ser removida.');
+      setFeedback({ type: 'error', message: 'A tag "Geral" é obrigatória e não pode ser removida.' });
       return;
     }
 
@@ -182,7 +187,7 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
 
       queryClient.invalidateQueries({ queryKey: ['obra-photos', obraIdNum] });
     } catch (err: any) {
-      alert(`Falha ao atualizar categoria da foto: ${err.message}`);
+      setFeedback({ type: 'error', message: `Falha ao atualizar categoria da foto: ${err.message}` });
     } finally {
       setUpdatingPhotoId(null);
     }
@@ -317,24 +322,24 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
     }
   };
 
-  // Exclusão de foto já enviada (Hard Delete)
-  const handleDeleteCloudPhoto = async (photo: ObraPhoto) => {
-    const confirmed = window.confirm(
-      `Excluir permanentemente a foto "${photo.file_name || 'do projeto'}"?`
-    );
-    if (!confirmed) return;
+  // Confirmação e Execução de Exclusão de foto
+  const handleConfirmDeleteCloudPhoto = async () => {
+    if (!photoToDelete) return;
 
-    setDeletingPhotoId(photo.id);
+    setIsDeleting(true);
+    setDeleteErrorMessage(null);
+
     try {
       await deletePhotoMutation.mutateAsync({
-        photoId: photo.id,
-        storagePath: photo.storage_path,
+        photoId: photoToDelete.id,
+        storagePath: photoToDelete.storage_path,
         idObra: obraIdNum,
       });
+      setPhotoToDelete(null);
     } catch (err: any) {
-      alert(`Falha ao excluir foto: ${err.message}`);
+      setDeleteErrorMessage(err.message || 'Falha ao excluir foto.');
     } finally {
-      setDeletingPhotoId(null);
+      setIsDeleting(false);
     }
   };
 
@@ -380,7 +385,7 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
     const tagInfo = tags.find((t) => t.id === photo.subcategory);
     return {
       src: photo.public_url,
-      alt: `${tagInfo ? `${tagInfo.icon} ${tagInfo.label} - ` : ''}${photo.file_name || 'Foto do Projeto'}`,
+      alt: `${tagInfo ? `${tagInfo.label} - ` : ''}${photo.file_name || 'Foto do Projeto'}`,
     };
   });
 
@@ -397,7 +402,7 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
           <div className="flex items-center gap-4">
             <Link
               href={`/obra/${idObra}`}
-              className="inline-flex items-center gap-2 text-xs font-bold text-zinc-300 hover:text-white px-3.5 py-2 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-all shadow-sm"
+              className="inline-flex items-center gap-2 text-xs font-bold text-zinc-300 hover:text-white px-3.5 py-2 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-all shadow-sm min-h-[44px]"
             >
               <ArrowLeft className="w-4 h-4 text-zinc-400" />
               <span>Voltar para a Obra</span>
@@ -408,7 +413,7 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                 <h1 className="text-base sm:text-lg font-extrabold text-white tracking-tight">
                   Workspace de Fotos do Projeto
                 </h1>
-                <span className="text-[10px] font-extrabold font-mono uppercase bg-[#ffc61e]/20 text-[#ffc61e] border border-[#ffc61e]/50 px-2.5 py-0.5 rounded-full tracking-wider shadow-sm flex items-center gap-1">
+                <span className="text-xs font-extrabold font-mono uppercase bg-[#ffc61e]/20 text-[#ffc61e] border border-[#ffc61e]/50 px-2.5 py-0.5 rounded-full tracking-wider shadow-sm flex items-center gap-1">
                   <Shield className="w-3 h-3 text-[#ffc61e]" /> ADMIN
                 </span>
               </div>
@@ -444,11 +449,11 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                     Tags de Engenharia
                   </h3>
                 </div>
-                <span className="text-[11px] font-bold text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded-md border border-zinc-800">
+                <span className="text-xs font-bold text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded-md border border-zinc-800">
                   {totalPhotosCount} fotos
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400 leading-tight">
+              <p className="text-xs text-zinc-400 leading-tight">
                 Arraste uma tag e solte em cima de qualquer foto para categorizá-la.
               </p>
             </div>
@@ -457,17 +462,17 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
             <button
               type="button"
               onClick={() => setActiveFilterTag(null)}
-              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all border ${
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all border min-h-[40px] ${
                 activeFilterTag === null
                   ? 'bg-[#ffc61e] text-black border-[#ffc61e] shadow-md font-extrabold'
-                  : 'bg-zinc-950 text-zinc-300 border-zinc-800 hover:bg-zinc-850 hover:text-white'
+                  : 'bg-zinc-950 text-zinc-300 border-zinc-800 hover:bg-zinc-900 hover:text-white'
               }`}
             >
               <div className="flex items-center gap-2">
                 <Filter className="w-3.5 h-3.5" />
                 <span>Todas as Fotos</span>
               </div>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+              <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold ${
                 activeFilterTag === null ? 'bg-black/20 text-black' : 'bg-zinc-900 text-zinc-400'
               }`}>
                 {totalPhotosCount}
@@ -489,7 +494,7 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                       e.dataTransfer.effectAllowed = 'copy';
                     }}
                     onClick={() => setActiveFilterTag((prev) => (prev === tag.id ? null : tag.id))}
-                    className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all border select-none group cursor-grab active:cursor-grabbing shadow-sm ${
+                    className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all border select-none group cursor-grab active:cursor-grabbing shadow-sm min-h-[40px] ${
                       isFilterActive
                         ? 'bg-[#ffc61e] text-black border-[#ffc61e] font-extrabold shadow-md'
                         : 'bg-zinc-950 text-zinc-200 border-zinc-800 hover:border-[#ffc61e]/70 hover:bg-zinc-900'
@@ -500,12 +505,12 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                       <GripVertical className={`w-3.5 h-3.5 shrink-0 ${
                         isFilterActive ? 'text-black/60' : 'text-zinc-600 group-hover:text-[#ffc61e]'
                       }`} />
-                      <span className="text-base shrink-0">{tag.icon}</span>
+                      <CategoryIcon id={tag.id} className={`w-4 h-4 shrink-0 ${isFilterActive ? 'text-black' : 'text-[#ffc61e]'}`} />
                       <span className="truncate">{tag.label}</span>
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold ${
                         isFilterActive
                           ? 'bg-black/20 text-black'
                           : count > 0
@@ -525,7 +530,7 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                           className={`p-1 rounded-md transition-colors ${
                             isFilterActive
                               ? 'hover:bg-black/20 text-black'
-                              : 'hover:bg-red-500/20 hover:text-red-400 text-zinc-500'
+                              : 'hover:bg-zinc-800 hover:text-red-400 text-zinc-400'
                           }`}
                           title="Remover tag customizada"
                         >
@@ -540,7 +545,7 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
 
             {/* Formulário Compacto para Criar Nova Tag */}
             <form onSubmit={handleAddTag} className="pt-2 border-t border-zinc-800 space-y-2">
-              <span className="text-[10px] font-bold uppercase text-zinc-400 block px-0.5">
+              <span className="text-xs font-bold uppercase text-zinc-400 block px-0.5">
                 Nova Tag Personalizada
               </span>
               <div className="flex items-center gap-1.5">
@@ -549,15 +554,15 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                   placeholder="Nome da tag..."
                   value={newTagInput}
                   onChange={(e) => setNewTagInput(e.target.value)}
-                  className="h-8 bg-zinc-950 border-zinc-800 text-xs text-zinc-100 placeholder:text-zinc-500 rounded-lg focus:border-[#ffc61e]"
+                  className="h-9 bg-zinc-950 border-zinc-800 text-xs text-zinc-100 placeholder:text-zinc-500 rounded-lg focus:border-[#ffc61e]"
                 />
                 <Button
                   type="submit"
                   size="sm"
                   disabled={!newTagInput.trim()}
-                  className="h-8 px-2.5 bg-[#ffc61e] hover:bg-[#e5b010] text-black font-extrabold text-xs rounded-lg shrink-0"
+                  className="h-9 px-3 bg-[#ffc61e] hover:bg-[#e5b010] text-black font-extrabold text-xs rounded-lg shrink-0 min-h-[36px]"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-4 h-4" />
                 </Button>
               </div>
             </form>
@@ -572,7 +577,10 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
           {/* 1. DROPZONE FULL-WIDTH */}
           <div
             {...getRootProps()}
-            className={`p-8 sm:p-10 rounded-2xl border-2 border-dashed transition-all cursor-pointer text-center flex flex-col items-center justify-center space-y-3 shadow-sm ${
+            tabIndex={0}
+            role="button"
+            aria-label="Área para soltar ou selecionar fotos do projeto"
+            className={`p-8 sm:p-10 rounded-2xl border-2 border-dashed transition-all cursor-pointer text-center flex flex-col items-center justify-center space-y-3 shadow-sm focus-visible:ring-2 focus-visible:ring-[#ffc61e] focus-visible:outline-none ${
               isDragActive
                 ? 'border-[#ffc61e] bg-[#ffc61e]/15 scale-[1.005]'
                 : isProcessing
@@ -580,21 +588,21 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                 : 'border-zinc-800 bg-zinc-950/80 hover:border-[#ffc61e]/70 hover:bg-zinc-900/60'
             }`}
           >
-            <input {...getInputProps()} />
+            <input {...getInputProps()} aria-label="Upload de fotos de projeto" />
 
             {isProcessing ? (
-              <div className="space-y-3 py-2">
+              <div className="space-y-3 py-2 w-full max-w-md mx-auto" role="progressbar" aria-live="polite">
                 <Loader2 className="w-10 h-10 animate-spin text-[#ffc61e] mx-auto" />
                 {progress && (
-                  <div className="space-y-1.5 max-w-md mx-auto">
+                  <div className="space-y-1.5">
                     <p className="text-xs font-bold text-white">
                       {progress.stage === 'compressing' && 'Comprimindo foto'}
                       {progress.stage === 'uploading' && 'Enviando para o Storage'}
                       {progress.stage === 'saving' && 'Gravando na Nuvem'}
                       {' '}({progress.current} de {progress.total})
                     </p>
-                    <p className="text-[11px] text-zinc-400 font-mono truncate">{progress.fileName}</p>
-                    <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden mt-1 border border-zinc-700">
+                    <p className="text-xs text-zinc-400 font-mono truncate">{progress.fileName}</p>
+                    <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden mt-1 border border-zinc-700">
                       <div
                         className="bg-[#ffc61e] h-full transition-all duration-300"
                         style={{ width: `${(progress.current / progress.total) * 100}%` }}
@@ -625,7 +633,7 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
           {/* Feedback de Status */}
           {feedback && (
             <div
-              className={`p-3.5 rounded-xl border text-xs font-bold flex items-center gap-2.5 ${
+              className={`p-3.5 rounded-xl border text-xs font-bold flex items-center gap-2.5 animate-in fade-in duration-200 ${
                 feedback.type === 'success'
                   ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
                   : 'bg-red-500/10 border-red-500/30 text-red-400'
@@ -651,7 +659,7 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                   <h4 className="text-xs font-bold text-white">
                     {stagedPhotos.length} foto(s) na fila aguardando upload
                   </h4>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-xs text-zinc-400">
                     Arraste as tags para os cards abaixo para categorizar e clique em Enviar.
                   </p>
                 </div>
@@ -664,7 +672,7 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                   size="sm"
                   onClick={handleClearStaging}
                   disabled={isProcessing}
-                  className="h-9 px-3 text-xs border-zinc-700 bg-zinc-950 text-zinc-300 hover:text-white"
+                  className="h-9 px-3 text-xs border-zinc-700 bg-zinc-950 text-zinc-300 hover:text-white min-h-[36px]"
                 >
                   Limpar Fila
                 </Button>
@@ -673,7 +681,7 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                   size="sm"
                   onClick={handleUploadAllStaged}
                   disabled={isProcessing}
-                  className="h-9 px-4 bg-[#ffc61e] hover:bg-[#e5b010] text-black font-extrabold text-xs rounded-xl shadow-md"
+                  className="h-9 px-4 bg-[#ffc61e] hover:bg-[#e5b010] text-black font-extrabold text-xs rounded-xl shadow-md min-h-[36px]"
                 >
                   {isProcessing ? (
                     <>
@@ -701,7 +709,7 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                 </span>
                 <span>({filteredStagedPhotos.length + filteredCloudPhotos.length} fotos)</span>
               </div>
-              <span className="text-[11px] text-zinc-500">Arraste qualquer tag para o card</span>
+              <span className="text-xs text-zinc-500">Arraste qualquer tag para o card</span>
             </div>
 
             {filteredStagedPhotos.length === 0 && filteredCloudPhotos.length === 0 ? (
@@ -726,7 +734,7 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                   const currentTag = tags.find((t) => t.id === item.subcategory) || {
                     id: 'geral',
                     label: 'Geral',
-                    icon: '📁',
+                    icon: 'Folder',
                   };
                   const isCardDragOver = dragOverCardId === item.id;
 
@@ -755,9 +763,9 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                     >
                       {/* Overlay ao passar tag arrastada por cima */}
                       {isCardDragOver && (
-                        <div className="absolute inset-0 z-30 bg-black/80 backdrop-blur-xs rounded-2xl flex flex-col items-center justify-center border-2 border-[#ffc61e] pointer-events-none animate-pulse">
+                        <div className="absolute inset-0 z-30 bg-black/80 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center border-2 border-[#ffc61e] pointer-events-none animate-pulse">
                           <Sparkles className="w-7 h-7 text-[#ffc61e]" />
-                          <span className="text-[11px] font-extrabold text-[#ffc61e] mt-1">
+                          <span className="text-xs font-extrabold text-[#ffc61e] mt-1">
                             Solte a tag aqui!
                           </span>
                         </div>
@@ -765,8 +773,8 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
 
                       {/* Header do Card: Tag Atual + Botão Descartar da Fila */}
                       <div className="flex items-center justify-between gap-1">
-                        <div className="flex items-center gap-1 text-[10px] font-extrabold bg-[#ffc61e] text-black px-2 py-0.5 rounded-md truncate shadow-sm">
-                          <span>{currentTag.icon}</span>
+                        <div className="flex items-center gap-1.5 text-xs font-extrabold bg-[#ffc61e] text-black px-2 py-0.5 rounded-md truncate shadow-sm">
+                          <CategoryIcon id={currentTag.id} className="w-3.5 h-3.5 shrink-0 text-black" />
                           <span className="truncate">{currentTag.label}</span>
                         </div>
 
@@ -774,28 +782,29 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                           type="button"
                           onClick={() => handleRemoveStagedPhoto(item.id)}
                           disabled={isProcessing}
-                          className="w-6 h-6 rounded-md bg-zinc-900 hover:bg-red-600 text-zinc-400 hover:text-white flex items-center justify-center transition-all border border-zinc-800 shrink-0"
+                          className="w-7 h-7 rounded-md bg-zinc-900 hover:bg-zinc-800 hover:text-red-400 text-zinc-400 flex items-center justify-center transition-all border border-zinc-800 shrink-0"
                           title="Remover da fila"
+                          aria-label="Remover foto da fila"
                         >
-                          <X className="w-3.5 h-3.5" />
+                          <X className="w-4 h-4" />
                         </button>
                       </div>
 
                       {/* Miniatura da Foto Staged */}
-                      <div className="relative aspect-square w-full rounded-xl overflow-hidden bg-black border border-zinc-850">
+                      <div className="relative aspect-square w-full rounded-xl overflow-hidden bg-black border border-zinc-800">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={item.previewUrl}
                           alt={item.file.name}
                           className="w-full h-full object-cover"
                         />
-                        <div className="absolute bottom-1.5 right-1.5 bg-black/80 backdrop-blur-md px-1.5 py-0.5 rounded text-[9px] font-mono text-[#ffc61e] font-bold border border-[#ffc61e]/40">
+                        <div className="absolute bottom-1.5 right-1.5 bg-black/80 backdrop-blur-md px-2 py-0.5 rounded text-xs font-mono text-[#ffc61e] font-bold border border-[#ffc61e]/40">
                           🟡 Fila
                         </div>
                       </div>
 
                       {/* Nome do arquivo */}
-                      <p className="text-[11px] font-medium text-zinc-300 truncate px-0.5" title={item.file.name}>
+                      <p className="text-xs font-medium text-zinc-300 truncate px-0.5" title={item.file.name}>
                         {item.file.name}
                       </p>
 
@@ -808,13 +817,14 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                               key={tag.id}
                               type="button"
                               onClick={() => handleSetStagedSubcategory(item.id, tag.id)}
-                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all border ${
+                              className={`px-2 py-1 rounded text-xs font-bold transition-all border flex items-center gap-1 ${
                                 isSelected
-                                  ? 'bg-[#ffc61e] text-black border-[#ffc61e]'
-                                  : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                              ? 'bg-[#ffc61e] text-black border-[#ffc61e]'
+                              : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'
                               }`}
                             >
-                              {tag.icon} {tag.label}
+                              <CategoryIcon id={tag.id} className={`w-3 h-3 shrink-0 ${isSelected ? 'text-black' : 'text-[#ffc61e]'}`} />
+                              <span className="truncate">{tag.label}</span>
                             </button>
                           );
                         })}
@@ -830,11 +840,10 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                   const currentTag = tags.find((t) => t.id === photo.subcategory) || {
                     id: 'geral',
                     label: 'Geral',
-                    icon: '📁',
+                    icon: 'Folder',
                   };
                   const isCardDragOver = dragOverCardId === photo.id;
                   const isUpdatingThis = updatingPhotoId === photo.id;
-                  const isDeletingThis = deletingPhotoId === photo.id;
                   const globalIndex = projetoPhotos.findIndex((p) => p.id === photo.id);
 
                   return (
@@ -862,9 +871,9 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                     >
                       {/* Overlay ao passar tag arrastada por cima */}
                       {isCardDragOver && (
-                        <div className="absolute inset-0 z-30 bg-black/80 backdrop-blur-xs rounded-2xl flex flex-col items-center justify-center border-2 border-[#ffc61e] pointer-events-none animate-pulse">
+                        <div className="absolute inset-0 z-30 bg-black/80 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center border-2 border-[#ffc61e] pointer-events-none animate-pulse">
                           <Sparkles className="w-7 h-7 text-[#ffc61e]" />
-                          <span className="text-[11px] font-extrabold text-[#ffc61e] mt-1">
+                          <span className="text-xs font-extrabold text-[#ffc61e] mt-1">
                             Atribuir tag à foto salva!
                           </span>
                         </div>
@@ -872,34 +881,39 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
 
                       {/* Header do Card: Tag Atual + Botão Delete */}
                       <div className="flex items-center justify-between gap-1">
-                        <div className="flex items-center gap-1 text-[10px] font-bold bg-zinc-900 border border-zinc-750 text-zinc-200 px-2 py-0.5 rounded-md truncate shadow-sm">
+                        <div className="flex items-center gap-1.5 text-xs font-bold bg-zinc-900 border border-zinc-800 text-zinc-200 px-2 py-0.5 rounded-md truncate shadow-sm">
                           {isUpdatingThis ? (
                             <Loader2 className="w-3 h-3 animate-spin text-[#ffc61e]" />
                           ) : (
-                            <span>{currentTag.icon}</span>
+                            <CategoryIcon id={currentTag.id} className="w-3.5 h-3.5 shrink-0 text-[#ffc61e]" />
                           )}
                           <span className="truncate">{currentTag.label}</span>
                         </div>
 
                         <button
                           type="button"
-                          onClick={() => handleDeleteCloudPhoto(photo)}
-                          disabled={isDeletingThis}
-                          className="w-6 h-6 rounded-md bg-zinc-900 hover:bg-red-600 text-zinc-400 hover:text-white flex items-center justify-center transition-all border border-zinc-800 shrink-0"
-                          title="Excluir foto permanentemente (Admin)"
+                          onClick={() => setPhotoToDelete(photo)}
+                          className="w-7 h-7 rounded-md bg-zinc-900 hover:bg-zinc-800 hover:text-red-400 text-zinc-400 flex items-center justify-center transition-all border border-zinc-800 shrink-0"
+                          title="Excluir foto permanentemente"
+                          aria-label="Excluir foto do projeto"
                         >
-                          {isDeletingThis ? (
-                            <Loader2 className="w-3 h-3 animate-spin text-red-400" />
-                          ) : (
-                            <Trash2 className="w-3.5 h-3.5" />
-                          )}
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
 
                       {/* Miniatura da Foto Salva com Lightbox ao Clicar */}
                       <div
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Ampliar foto: ${photo.file_name || currentTag.label}`}
                         onClick={() => handleOpenLightbox(globalIndex >= 0 ? globalIndex : 0)}
-                        className="relative aspect-square w-full rounded-xl overflow-hidden bg-black border border-zinc-850 cursor-pointer group-hover:border-[#ffc61e]/60 transition-all"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleOpenLightbox(globalIndex >= 0 ? globalIndex : 0);
+                          }
+                        }}
+                        className="relative aspect-square w-full rounded-xl overflow-hidden bg-black border border-zinc-800 cursor-pointer group-hover:border-[#ffc61e]/60 focus-visible:ring-2 focus-visible:ring-[#ffc61e] focus-visible:outline-none transition-all"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
@@ -909,17 +923,17 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                           className="w-full h-full object-cover"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-2">
-                          <span className="text-[10px] text-white font-bold flex items-center gap-1">
-                            <Maximize2 className="w-3 h-3" /> Ampliar
+                          <span className="text-xs text-white font-bold flex items-center gap-1">
+                            <Maximize2 className="w-3.5 h-3.5" /> Ampliar
                           </span>
                         </div>
-                        <div className="absolute bottom-1.5 right-1.5 bg-black/80 backdrop-blur-md px-1.5 py-0.5 rounded text-[9px] font-mono text-emerald-400 font-bold border border-emerald-500/30">
+                        <div className="absolute bottom-1.5 right-1.5 bg-black/80 backdrop-blur-md px-2 py-0.5 rounded text-xs font-mono text-emerald-400 font-bold border border-emerald-500/30">
                           🟢 Nuvem
                         </div>
                       </div>
 
                       {/* Nome do arquivo */}
-                      <p className="text-[11px] font-medium text-zinc-300 truncate px-0.5" title={photo.file_name || 'Foto'}>
+                      <p className="text-xs font-medium text-zinc-300 truncate px-0.5" title={photo.file_name || 'Foto'}>
                         {photo.file_name || 'Foto'}
                       </p>
 
@@ -933,13 +947,14 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
                               type="button"
                               onClick={() => handleUpdateCloudPhotoSubcategory(photo.id, tag.id)}
                               disabled={isUpdatingThis}
-                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all border ${
+                              className={`px-2 py-1 rounded text-xs font-bold transition-all border flex items-center gap-1 ${
                                 isSelected
                                   ? 'bg-[#ffc61e] text-black border-[#ffc61e]'
                                   : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'
                               }`}
                             >
-                              {tag.icon} {tag.label}
+                              <CategoryIcon id={tag.id} className={`w-3 h-3 shrink-0 ${isSelected ? 'text-black' : 'text-[#ffc61e]'}`} />
+                              <span className="truncate">{tag.label}</span>
                             </button>
                           );
                         })}
@@ -960,6 +975,53 @@ export function ProjectUploadPage({ idObra }: ProjectUploadPageProps) {
         index={lightboxIndex}
         slides={lightboxSlides}
       />
+
+      {/* Modal de Confirmação de Exclusão (Substitui window.confirm) */}
+      <Dialog open={!!photoToDelete} onOpenChange={(open) => !open && setPhotoToDelete(null)}>
+        <DialogHeader>
+          <div className="w-10 h-10 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400 mb-2">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+          <DialogTitle>Confirmar Exclusão de Foto do Projeto</DialogTitle>
+          <DialogDescription>
+            Tem certeza de que deseja excluir permanentemente a foto &quot;{photoToDelete?.file_name || 'do projeto'}&quot;? Esta ação removerá o arquivo da nuvem e do banco de dados.
+          </DialogDescription>
+        </DialogHeader>
+
+        {deleteErrorMessage && (
+          <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-400">
+            {deleteErrorMessage}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2.5 pt-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setPhotoToDelete(null)}
+            disabled={isDeleting}
+            className="min-h-[44px] px-4 text-xs font-semibold rounded-xl border-zinc-800 hover:bg-zinc-800 text-zinc-300"
+          >
+            Cancelar
+          </Button>
+
+          <Button
+            type="button"
+            onClick={handleConfirmDeleteCloudPhoto}
+            disabled={isDeleting}
+            className="min-h-[44px] px-4 text-xs font-extrabold rounded-xl bg-red-600 hover:bg-red-700 text-white border-none shadow-md"
+          >
+            {isDeleting ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" /> Excluindo...
+              </span>
+            ) : (
+              'Sim, Excluir Foto'
+            )}
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }
+

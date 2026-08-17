@@ -9,6 +9,7 @@ import { useObraPhotos, usePerfil, useDeletePhoto } from '@/lib/query/hooks';
 import { removeOfflinePhoto } from '@/lib/offline-photo-store';
 import { PROJECT_SUBCATEGORIES } from '@/lib/supabase/types';
 import { ProjectPhotoDropzone } from './project-photo-dropzone';
+import { CategoryIcon } from './category-icon';
 import {
   Camera,
   Upload,
@@ -117,7 +118,6 @@ export function PhotoGallery({ obraId }: PhotoGalleryProps) {
     const sections: Array<{
       id: string;
       label: string;
-      icon: string;
       photos: typeof projetoPhotos;
     }> = [];
 
@@ -130,7 +130,6 @@ export function PhotoGallery({ obraId }: PhotoGalleryProps) {
         sections.push({
           id: subcat.id,
           label: subcat.label,
-          icon: subcat.icon,
           photos,
         });
         photos.forEach((p) => matchedPhotoIds.add(p.id));
@@ -143,7 +142,6 @@ export function PhotoGallery({ obraId }: PhotoGalleryProps) {
       sections.push({
         id: 'outros',
         label: 'Geral / Outros Documentos',
-        icon: '📁',
         photos: orphanedPhotos,
       });
     }
@@ -172,7 +170,7 @@ export function PhotoGallery({ obraId }: PhotoGalleryProps) {
       const subInfo = PROJECT_SUBCATEGORIES.find((s) => s.id === photo.subcategory);
       return {
         src: photo.public_url,
-        alt: `${subInfo ? `${subInfo.icon} ${subInfo.label} - ` : ''}${photo.file_name || 'Foto do Projeto'}`,
+        alt: `${subInfo ? `${subInfo.label} - ` : ''}${photo.file_name || 'Foto do Projeto'}`,
       };
     });
   }, [activeTab, localPreviews, registroPhotos, flattenedProjectPhotos]);
@@ -289,7 +287,7 @@ export function PhotoGallery({ obraId }: PhotoGalleryProps) {
                 {groupedProjectSections.map((section) => (
                   <div key={section.id} className="space-y-2.5 bg-zinc-950/70 p-3.5 rounded-2xl border border-zinc-800">
                     <div className="flex items-center gap-2 px-1">
-                      <span className="text-sm">{section.icon}</span>
+                      <CategoryIcon id={section.id} className="w-4 h-4 text-[#ffc61e]" />
                       <h4 className="text-xs font-bold text-white">{section.label}</h4>
                       <span className="text-xs font-extrabold text-[#ffc61e] bg-[#ffc61e]/15 px-2 py-0.5 rounded-full border border-[#ffc61e]/30">
                         {section.photos.length}

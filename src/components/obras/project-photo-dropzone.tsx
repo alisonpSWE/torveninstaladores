@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { compressImage } from '@/lib/image-compressor';
 import { PROJECT_SUBCATEGORIES, ProjectSubcategoryId } from '@/lib/supabase/types';
+import { CategoryIcon } from './category-icon';
 import { UploadCloud, Loader2, CheckCircle2, AlertCircle, Layers } from 'lucide-react';
 
 interface ProjectPhotoDropzoneProps {
@@ -188,7 +189,10 @@ export function ProjectPhotoDropzone({
                     : 'bg-zinc-950/80 text-zinc-300 border-zinc-800 hover:bg-zinc-900 hover:border-zinc-700'
                 }`}
               >
-                <span>{subcat.icon}</span>
+                <CategoryIcon
+                  id={subcat.id}
+                  className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-black' : 'text-[#ffc61e]'}`}
+                />
                 <span className="truncate">{subcat.label}</span>
               </button>
             );

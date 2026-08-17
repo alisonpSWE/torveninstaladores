@@ -18,9 +18,9 @@ export interface OfflinePhoto {
 // Tipo de alias para retrocompatibilidade com hooks existentes
 export type PendingPhoto = OfflinePhoto;
 
-// Cria uma store isolada no IndexedDB chamada 'torven-photos-store'
+// Cria uma store isolada no IndexedDB chamada 'torven-offline-photos-v2'
 const photoStore = typeof window !== 'undefined' 
-  ? createStore('torven-offline-photos-db', 'photos')
+  ? createStore('torven-offline-photos-v2', 'photos')
   : undefined;
 
 /**

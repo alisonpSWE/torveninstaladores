@@ -7,11 +7,12 @@ import { NetworkStatus } from '@/components/network-status';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Search, RefreshCw, Plus, Sun, AlertCircle, CheckCircle2, Loader2, Layers, Shield } from 'lucide-react';
+import { Search, RefreshCw, Plus, Sun, AlertCircle, CheckCircle2, Loader2, Layers, Shield, Filter } from 'lucide-react';
 
 export function ObrasListPage() {
   const [mounted, setMounted] = useState(false);
   const [search, setSearch] = useState('');
+  const [adminTab, setAdminTab] = useState<'em_andamento' | 'todas'>('em_andamento');
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [idsToImport, setIdsToImport] = useState('');
   const [feedback, setFeedback] = useState<{
@@ -25,16 +26,22 @@ export function ObrasListPage() {
   }, []);
 
   const { data: perfil } = usePerfil();
+  const isAdmin = perfil?.role === 'admin';
+
+  // Se não for admin, ou se a aba 'em_andamento' estiver ativa, oculta 'Vistoria Solicitada'
+  const shouldExcludeVistoria = !isAdmin || adminTab === 'em_andamento';
 
   const { data: obras, isLoading, isFetching, refetch } = useObras({
     searchQuery: search,
-    excludeStatus: 'Vistoria Solicitada',
+    excludeStatus: shouldExcludeVistoria ? 'Vistoria Solicitada' : undefined,
   });
 
   const importMutation = useImportObra();
 
   const handleBatchImport = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) return;
+
     setFeedback(null);
 
     const parsedIds = idsToImport
@@ -72,6 +79,8 @@ export function ObrasListPage() {
       });
 
       setIdsToImport('');
+      // Ao importar manualmente, alterna para a visão 'todas' para garantir visualização de qualquer status
+      setAdminTab('todas');
       refetch();
     } catch (err: any) {
       setFeedback({ type: 'error', message: err.message || 'Erro de conexão ao importar obras.' });
@@ -97,8 +106,8 @@ export function ObrasListPage() {
                   <p className="text-xs text-[#ffc61e] font-extrabold tracking-widest uppercase">Instaladores</p>
                 </div>
                 {/* Pill ADMIN para a role admin */}
-                {perfil?.role === 'admin' && (
-                  <span className="text-[10px] font-extrabold font-mono uppercase bg-[#ffc61e]/20 text-[#ffc61e] border border-[#ffc61e]/50 px-2.5 py-0.5 rounded-full tracking-wider shadow-sm flex items-center gap-1 ml-1">
+                {isAdmin && (
+                  <span className="text-xs font-extrabold font-mono uppercase bg-[#ffc61e]/20 text-[#ffc61e] border border-[#ffc61e]/50 px-2.5 py-0.5 rounded-full tracking-wider shadow-sm flex items-center gap-1 ml-1">
                     <Shield className="w-3 h-3 text-[#ffc61e]" /> ADMIN
                   </span>
                 )}
@@ -117,6 +126,39 @@ export function ObrasListPage() {
               <RefreshCw className={`w-4 h-4 text-zinc-400 ${mounted && isFetching ? 'animate-spin text-[#ffc61e]' : ''}`} />
             </Button>
           </div>
+
+          {/* Abas de Filtro para Administradores (Em Andamento vs Todas) */}
+          {isAdmin && (
+            <div role="tablist" aria-label="Filtro de status de obras" className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800 text-xs font-bold w-full">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={adminTab === 'em_andamento'}
+                onClick={() => setAdminTab('em_andamento')}
+                className={`flex-1 min-h-[44px] px-3 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  adminTab === 'em_andamento'
+                    ? 'bg-[#ffc61e] text-black shadow-md font-extrabold'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
+                }`}
+              >
+                <span>Em Andamento</span>
+              </button>
+
+              <button
+                type="button"
+                role="tab"
+                aria-selected={adminTab === 'todas'}
+                onClick={() => setAdminTab('todas')}
+                className={`flex-1 min-h-[44px] px-3 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  adminTab === 'todas'
+                    ? 'bg-[#ffc61e] text-black shadow-md font-extrabold'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
+                }`}
+              >
+                <span>Todas as Obras (Admin)</span>
+              </button>
+            </div>
+          )}
 
           {/* Input de Busca com Foco em Alto Contraste */}
           <div className="relative">
@@ -163,6 +205,7 @@ export function ObrasListPage() {
             <div className="flex items-center justify-between text-xs text-zinc-400 px-1 font-medium">
               <span>
                 {obras.length} {obras.length === 1 ? 'obra encontrada' : 'obras encontradas'}
+                {isAdmin && adminTab === 'todas' && ' (Visão Completa)'}
               </span>
             </div>
             <div className="flex flex-col space-y-3.5">
@@ -183,10 +226,12 @@ export function ObrasListPage() {
               <p className="text-xs text-zinc-400 leading-relaxed">
                 {search
                   ? 'Tente buscar com outros termos de cliente, cidade ou ID.'
-                  : 'Importe obras do CRM Groner usando o botão "+" abaixo.'}
+                  : isAdmin
+                  ? 'Importe obras do CRM Groner usando o botão "+" abaixo.'
+                  : 'Aguarde o envio das obras pelo escritório.'}
               </p>
             </div>
-            {!search && (
+            {!search && isAdmin && (
               <Button onClick={() => setImportDialogOpen(true)} variant="default" size="sm" className="min-h-[48px] px-5">
                 <Plus className="w-4 h-4 mr-1.5" /> Importar Obra(s)
               </Button>
@@ -195,90 +240,96 @@ export function ObrasListPage() {
         )}
       </main>
 
-      {/* Floating Action Button (FAB) com Safe-Area Margin */}
-      <button
-        onClick={() => setImportDialogOpen(true)}
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-[#ffc61e] text-black shadow-lg flex items-center justify-center hover:bg-[#e5b010] active:scale-95 transition-all duration-150 border border-[#ffc61e]/40"
-        title="Importar Obra(s) do CRM Groner"
-      >
-        <Plus className="w-7 h-7 stroke-[2.5]" />
-      </button>
+      {/* Floating Action Button (FAB) exclusivo para Administradores */}
+      {isAdmin && (
+        <button
+          type="button"
+          onClick={() => setImportDialogOpen(true)}
+          className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-[#ffc61e] text-black shadow-lg flex items-center justify-center hover:bg-[#e5b010] active:scale-95 focus-visible:ring-2 focus-visible:ring-[#ffc61e] focus-visible:outline-none transition-all duration-150 border border-[#ffc61e]/40"
+          title="Importar Obra(s) do CRM Groner (Admin)"
+          aria-label="Importar Obra(s) do CRM Groner (Admin)"
+        >
+          <Plus className="w-7 h-7 stroke-[2.5]" />
+        </button>
+      )}
 
-      {/* Modal / Dialog para Importação em Lote */}
-      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Layers className="w-5 h-5 text-[#ffc61e]" /> Importar Obra(s) do CRM Groner
-          </DialogTitle>
-          <DialogDescription>
-            Digite um ou múltiplos IDs numéricos do Groner separados por vírgula (ex: 462, 463, 464) para sincronizar antes de ir para o campo.
-          </DialogDescription>
-        </DialogHeader>
+      {/* Modal / Dialog para Importação em Lote (Admin Only) */}
+      {isAdmin && (
+        <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Layers className="w-5 h-5 text-[#ffc61e]" /> Importar Obra(s) do CRM Groner
+            </DialogTitle>
+            <DialogDescription>
+              Digite um ou múltiplos IDs numéricos do Groner separados por vírgula (ex: 342, 462, 463).
+            </DialogDescription>
+          </DialogHeader>
 
-        <form onSubmit={handleBatchImport} className="space-y-4 pt-2">
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-300">IDs das Obras (Groner)</label>
-            <textarea
-              rows={3}
-              placeholder="Ex: 462, 463, 464"
-              value={idsToImport}
-              onChange={(e) => setIdsToImport(e.target.value)}
-              disabled={importMutation.isPending}
-              className="w-full bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#ffc61e] font-mono"
-            />
-          </div>
-
-          {feedback && (
-            <div
-              className={`p-3 rounded-xl text-xs space-y-1 border ${
-                feedback.type === 'success'
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                  : 'bg-red-500/10 border-red-500/30 text-red-400'
-              }`}
-            >
-              <div className="flex items-center gap-2 font-bold">
-                {feedback.type === 'success' ? (
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                )}
-                <span>{feedback.message}</span>
-              </div>
-
-              {feedback.errors && feedback.errors.length > 0 && (
-                <div className="text-xs pt-1 text-red-300 space-y-0.5 border-t border-red-500/20">
-                  {feedback.errors.map((err, idx) => (
-                    <div key={idx}>
-                      • Obra #{err.id}: {err.message}
-                    </div>
-                  ))}
-                </div>
-              )}
+          <form onSubmit={handleBatchImport} className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-300">IDs das Obras (Groner)</label>
+              <textarea
+                rows={3}
+                placeholder="Ex: 342, 462, 463"
+                value={idsToImport}
+                onChange={(e) => setIdsToImport(e.target.value)}
+                disabled={importMutation.isPending}
+                className="w-full bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-[#ffc61e] font-mono"
+              />
             </div>
-          )}
 
-          <div className="flex items-center justify-end gap-2 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setImportDialogOpen(false)}
-              disabled={importMutation.isPending}
-              className="min-h-[44px]"
-            >
-              {feedback?.type === 'success' ? 'Fechar' : 'Cancelar'}
-            </Button>
-            <Button type="submit" disabled={importMutation.isPending} className="min-h-[44px]">
-              {importMutation.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Importando...
-                </>
-              ) : (
-                'Importar Obra(s)'
-              )}
-            </Button>
-          </div>
-        </form>
-      </Dialog>
+            {feedback && (
+              <div
+                className={`p-3 rounded-xl text-xs space-y-1 border ${
+                  feedback.type === 'success'
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                    : 'bg-red-500/10 border-red-500/30 text-red-400'
+                }`}
+              >
+                <div className="flex items-center gap-2 font-bold">
+                  {feedback.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                  )}
+                  <span>{feedback.message}</span>
+                </div>
+
+                {feedback.errors && feedback.errors.length > 0 && (
+                  <div className="text-xs pt-1 text-red-300 space-y-0.5 border-t border-red-500/20">
+                    {feedback.errors.map((err, idx) => (
+                      <div key={idx}>
+                        • Obra #{err.id}: {err.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setImportDialogOpen(false)}
+                disabled={importMutation.isPending}
+                className="min-h-[44px]"
+              >
+                {feedback?.type === 'success' ? 'Fechar' : 'Cancelar'}
+              </Button>
+              <Button type="submit" disabled={importMutation.isPending} className="min-h-[44px]">
+                {importMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Importando...
+                  </>
+                ) : (
+                  'Importar Obra(s)'
+                )}
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+      )}
     </div>
   );
 }

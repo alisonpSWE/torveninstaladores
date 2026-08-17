@@ -35,16 +35,16 @@ export interface Obra {
 }
 
 export const PROJECT_SUBCATEGORIES = [
-  { id: 'fachada', label: 'Fachada', icon: '📸', appSheetField: 'CampoFotodafachadaProjeto' },
-  { id: 'padrao_entrada', label: 'Padrão de Entrada', icon: '⚡', appSheetField: 'CampoFotodopadrodeentradaProjeto' },
-  { id: 'medidor', label: 'Medidor', icon: '📊', appSheetField: 'CampoFotodomedidorProjeto' },
-  { id: 'disjuntor_geral', label: 'Disjuntor Geral', icon: '🔌', appSheetField: 'CampoFotododisjuntorgeralProjeto' },
-  { id: 'qdc', label: 'QDC', icon: '📦', appSheetField: 'CampoFotodoQDCProjeto' },
-  { id: 'ramal_entrada', label: 'Ramal de Entrada', icon: '🔗', appSheetField: 'CampoFotodoramaldeentradaProjeto' },
-  { id: 'local_inversor', label: 'Local do Inversor', icon: '📍', appSheetField: 'CampoFotodolocaldoinversorProjeto' },
-  { id: 'telhado', label: 'Telhado', icon: '🏠', appSheetField: 'CampoFotosdotelhadoProjeto' },
-  { id: 'drone', label: 'Drone', icon: '🚁', appSheetField: 'CampoFotosdedroneProjeto' },
-  { id: 'geral', label: 'Geral', icon: '📁', appSheetField: '' },
+  { id: 'fachada', label: 'Fachada', icon: 'Building2', appSheetField: 'CampoFotodafachadaProjeto' },
+  { id: 'padrao_entrada', label: 'Padrão de Entrada', icon: 'Zap', appSheetField: 'CampoFotodopadrodeentradaProjeto' },
+  { id: 'medidor', label: 'Medidor', icon: 'Gauge', appSheetField: 'CampoFotodomedidorProjeto' },
+  { id: 'disjuntor_geral', label: 'Disjuntor Geral', icon: 'Power', appSheetField: 'CampoFotododisjuntorgeralProjeto' },
+  { id: 'qdc', label: 'QDC', icon: 'Box', appSheetField: 'CampoFotodoQDCProjeto' },
+  { id: 'ramal_entrada', label: 'Ramal de Entrada', icon: 'Cable', appSheetField: 'CampoFotodoramaldeentradaProjeto' },
+  { id: 'local_inversor', label: 'Local do Inversor', icon: 'Cpu', appSheetField: 'CampoFotodolocaldoinversorProjeto' },
+  { id: 'telhado', label: 'Telhado', icon: 'Home', appSheetField: 'CampoFotosdotelhadoProjeto' },
+  { id: 'drone', label: 'Drone', icon: 'Plane', appSheetField: 'CampoFotosdedroneProjeto' },
+  { id: 'geral', label: 'Geral', icon: 'Folder', appSheetField: '' },
 ] as const;
 
 export type ProjectSubcategoryId = typeof PROJECT_SUBCATEGORIES[number]['id'];

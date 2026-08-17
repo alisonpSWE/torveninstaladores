@@ -2,10 +2,20 @@ import { NextResponse } from 'next/server';
 import { fetchGronerProject } from '@/lib/groner/groner-api';
 import { parseGronerProject } from '@/lib/groner/parse-groner-project';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getUserRole } from '@/lib/auth';
 import { Obra } from '@/lib/supabase/types';
 
 export async function POST(request: Request) {
   try {
+    // 1. Blindagem de segurança no Backend: Apenas administradores podem importar manualmente
+    const role = await getUserRole();
+    if (role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Acesso negado: Apenas administradores podem importar obras manualmente.' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const rawIds = body.id_obra || body.idObra || body.ids;
 
@@ -72,7 +82,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       message: `${successfulObras.length} obra(s) importada(s) com sucesso!`,
       obras: successfulObras,
-      obra: successfulObras[0], // Compatibilidade com frontend
+      obra: successfulObras[0],
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error: any) {

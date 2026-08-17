@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { compressImage } from '@/lib/image-compressor';
+import { compressImageNative } from '@/lib/image-compressor';
 import {
   savePhotoOffline,
   getOfflinePhotosByObra,
@@ -60,19 +60,25 @@ export function useOfflinePhotoUpload(obraId: number) {
     refetchInterval: 3000,
   });
 
-  // Previews locais em Blob URLs para exibição imediata na galeria
+  // Previews locais em Blob URLs para exibição imediata na galeria (com suporte a ArrayBuffer)
   const [localPreviews, setLocalPreviews] = useState<{ id: string; url: string; status: string }[]>([]);
 
   useEffect(() => {
     if (pendingPhotos && pendingPhotos.length > 0) {
       const previews = pendingPhotos.map((p) => {
-        const rawBlob = p.file || p.blob;
         let blobUrl = '';
         try {
-          blobUrl = URL.createObjectURL(rawBlob);
+          if (p.buffer && p.buffer.byteLength > 0) {
+            const blob = new Blob([p.buffer], { type: 'image/jpeg' });
+            blobUrl = URL.createObjectURL(blob);
+          } else if (p.file || p.blob) {
+            const raw = p.file || p.blob;
+            blobUrl = URL.createObjectURL(raw);
+          }
         } catch {
           blobUrl = '';
         }
+
         return {
           id: p.id,
           url: blobUrl,
@@ -93,23 +99,27 @@ export function useOfflinePhotoUpload(obraId: number) {
   }, [pendingPhotos]);
 
   /**
-   * Captura, Comprime e Salva uma foto localmente no IndexedDB
+   * Captura, Comprime via Canvas Nativo e Salva como ArrayBuffer no IndexedDB
    */
   const capturePhoto = useCallback(
     async (file: File): Promise<OfflinePhoto | null> => {
       if (!file || !obraId) return null;
 
       try {
-        console.log(`[USE OFFLINE PHOTO] 📸 Capturando e comprimindo foto para Obra #${obraId}...`);
-        const compressedFile = await compressImage(file);
-        const offlineRecord = await savePhotoOffline(Number(obraId), compressedFile, file.name);
+        console.log(`[USE OFFLINE PHOTO] 📸 Ingestão e compressão da foto para Obra #${obraId}...`);
+        const compressed = await compressImageNative(file, file.name);
+        const offlineRecord = await savePhotoOffline(
+          Number(obraId),
+          compressed.buffer,
+          compressed.fileName
+        );
 
         queryClient.invalidateQueries({ queryKey: ['offline-photos', Number(obraId)] });
         refetchPending();
 
         // Se estiver online, agenda sincronização controlada via syncEngine
         if (typeof navigator !== 'undefined' && navigator.onLine) {
-          syncEngine.scheduleStabilizedSync(300);
+          syncEngine.scheduleStabilizedSync(500);
         }
 
         return offlineRecord;

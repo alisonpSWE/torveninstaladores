@@ -4,7 +4,8 @@ export interface OfflinePhoto {
   id: string; // Client-side UUID
   id_obra: number;
   obraId: number; // Alias para retrocompatibilidade
-  file: Blob; // Blob comprimido armazenado no IndexedDB
+  buffer?: ArrayBuffer; // In-memory raw buffer (100% seguro para iOS WebKit)
+  file: Blob; // Blob armazenado no IndexedDB
   blob: Blob; // Alias para retrocompatibilidade
   fileName: string;
   contentType: string;
@@ -30,22 +31,28 @@ const legacyStore1 = typeof window !== 'undefined'
   : undefined;
 
 /**
- * Reidratação Segura do Blob em um objeto File com Buffer Intacto
+ * Reidratação Segura de ArrayBuffer/Blob em um objeto File com Buffer Intacto para Upload
  */
 export function createRehydratedFile(photo: OfflinePhoto): File {
-  const rawBlob = photo.file || photo.blob;
-  const type = photo.contentType || rawBlob?.type || 'image/jpeg';
   const fileNameClean = (photo.fileName || `foto_${photo.id_obra || photo.obraId}_${Date.now()}.jpg`).replace(
     /[^a-zA-Z0-9._-]/g,
     '_'
   );
+  const mimeType = photo.contentType || 'image/jpeg';
 
-  // Extrai fatia para assegurar novo buffer isolado e tipo MIME consistente
-  const safeBlob = rawBlob && rawBlob.size > 0
-    ? rawBlob.slice(0, rawBlob.size, type)
-    : new Blob([], { type });
+  // 1. Prioridade Máxima: ArrayBuffer puro em memória (Imune a perda de ponteiro no iOS)
+  if (photo.buffer && photo.buffer.byteLength > 0) {
+    return new File([photo.buffer], fileNameClean, { type: mimeType });
+  }
 
-  return new File([safeBlob], fileNameClean, { type });
+  // 2. Fallback: Blob salvo no IndexedDB (extrai fatia isolada)
+  const rawBlob = photo.file || photo.blob;
+  if (rawBlob && rawBlob.size > 0) {
+    const safeSlice = rawBlob.slice(0, rawBlob.size, mimeType);
+    return new File([safeSlice], fileNameClean, { type: mimeType });
+  }
+
+  return new File([new Blob([], { type: mimeType })], fileNameClean, { type: mimeType });
 }
 
 /**
@@ -69,11 +76,11 @@ async function migrateLegacyPhotos(): Promise<void> {
 }
 
 /**
- * Salva uma foto comprimida no IndexedDB local
+ * Salva uma foto no IndexedDB local com ingestão estrita de ArrayBuffer
  */
 export async function savePhotoOffline(
   obraId: number,
-  file: Blob,
+  source: Blob | File | ArrayBuffer,
   fileName?: string,
   category: string = 'registro',
   subcategory?: string
@@ -86,14 +93,27 @@ export async function savePhotoOffline(
   const cleanFileName = fileName || `foto_${obraId}_${now}.jpg`;
   const storagePath = `obra_${obraId}/${category}/${now}_${cleanFileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
 
+  // Extração imediata do ArrayBuffer para blindagem do iOS WebKit
+  let rawBuffer: ArrayBuffer;
+  if (source instanceof ArrayBuffer) {
+    rawBuffer = source;
+  } else if (source && typeof (source as Blob).arrayBuffer === 'function') {
+    rawBuffer = await (source as Blob).arrayBuffer();
+  } else {
+    rawBuffer = new ArrayBuffer(0);
+  }
+
+  const safeBlob = new Blob([rawBuffer], { type: 'image/jpeg' });
+
   const photoRecord: OfflinePhoto = {
     id: photoId,
     id_obra: Number(obraId),
     obraId: Number(obraId),
-    file,
-    blob: file,
+    buffer: rawBuffer,
+    file: safeBlob,
+    blob: safeBlob,
     fileName: cleanFileName,
-    contentType: file.type || 'image/jpeg',
+    contentType: 'image/jpeg',
     bucket: 'photos',
     storagePath,
     timestamp: now,
@@ -105,7 +125,10 @@ export async function savePhotoOffline(
 
   if (primaryStore) {
     await set(photoId, photoRecord, primaryStore);
-    console.log(`[OFFLINE PHOTO STORE] 📦 Foto #${photoId} salva no IndexedDB para a Obra #${obraId}.`);
+    console.log(
+      `[OFFLINE PHOTO STORE] 📦 Foto #${photoId} salva no IndexedDB ` +
+      `(${rawBuffer.byteLength} bytes) para a Obra #${obraId}.`
+    );
   }
 
   return photoRecord;
@@ -115,16 +138,28 @@ export async function savePendingPhoto(photo: any): Promise<void> {
   const photoId = photo.id || `photo_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   const now = photo.createdAt || photo.timestamp || Date.now();
   const obraId = Number(photo.obraId || photo.id_obra || 0);
-  const blobObj = photo.blob || photo.file;
+  const source = photo.buffer || photo.blob || photo.file;
   const fileName = photo.fileName || `foto_${now}.jpg`;
   const storagePath = photo.storagePath || `obra_${obraId}/${now}_${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+
+  let rawBuffer: ArrayBuffer;
+  if (source instanceof ArrayBuffer) {
+    rawBuffer = source;
+  } else if (source && typeof (source as Blob).arrayBuffer === 'function') {
+    rawBuffer = await (source as Blob).arrayBuffer();
+  } else {
+    rawBuffer = new ArrayBuffer(0);
+  }
+
+  const safeBlob = new Blob([rawBuffer], { type: photo.contentType || 'image/jpeg' });
 
   const record: OfflinePhoto = {
     id: photoId,
     id_obra: obraId,
     obraId: obraId,
-    file: blobObj,
-    blob: blobObj,
+    buffer: rawBuffer,
+    file: safeBlob,
+    blob: safeBlob,
     fileName,
     contentType: photo.contentType || 'image/jpeg',
     bucket: photo.bucket || 'photos',
@@ -145,7 +180,6 @@ export async function savePendingPhoto(photo: any): Promise<void> {
 export async function getOfflinePhotosByObra(obraId: number): Promise<OfflinePhoto[]> {
   if (!primaryStore) return [];
 
-  // Executa migração defensiva
   await migrateLegacyPhotos();
 
   try {

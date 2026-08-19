@@ -31,9 +31,10 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // REGRAS DE ISENÇÃO DO PROXY/MIDDLEWARE:
-  // Permitir acesso livre aos webhooks do QStash (/api/webhooks/*), tela de login, sw.js e assets estáticos
+  // Permitir acesso livre aos webhooks do QStash (/api/webhooks/*), tela de login, logout, sw.js e assets estáticos
   const isWebhookRoute = pathname.startsWith('/api/webhooks');
   const isLoginPage = pathname === '/login';
+  const isLogoutPage = pathname === '/logout';
   const isStaticAsset =
     pathname.startsWith('/_next') ||
     pathname.startsWith('/static') ||
@@ -42,7 +43,7 @@ export async function proxy(request: NextRequest) {
     pathname === '/sw.js' ||
     pathname.match(/\.(png|jpg|jpeg|svg|gif|webp|ico|css|js)$/i);
 
-  if (isWebhookRoute || isStaticAsset) {
+  if (isWebhookRoute || isStaticAsset || isLogoutPage) {
     return response;
   }
 

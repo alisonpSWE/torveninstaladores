@@ -63,13 +63,17 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
 
   const syncWithGronerMutation = useSyncObraWithGroner();
   const updateObsMutation = useUpdateObraObservacoes();
+  const [feedbackBanner, setFeedbackBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const handlePanicSync = async () => {
     if (!obra) return;
+    setFeedbackBanner(null);
     try {
       await syncWithGronerMutation.mutateAsync(obra.id_obra);
+      setFeedbackBanner({ type: 'success', message: 'Sincronização com Groner CRM realizada com sucesso!' });
+      setTimeout(() => setFeedbackBanner(null), 4000);
     } catch (err: any) {
-      alert(`Falha ao sincronizar com o Groner CRM: ${err.message}`);
+      setFeedbackBanner({ type: 'error', message: `Falha ao sincronizar com o Groner CRM: ${err.message}` });
     }
   };
 
@@ -81,8 +85,10 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
         observacoes: obsText.trim() || null,
       });
       setIsEditingObs(false);
+      setFeedbackBanner({ type: 'success', message: 'Observações de campo salvas com sucesso!' });
+      setTimeout(() => setFeedbackBanner(null), 4000);
     } catch (err: any) {
-      alert(`Erro ao salvar observações: ${err.message}`);
+      setFeedbackBanner({ type: 'error', message: `Erro ao salvar observações: ${err.message}` });
     }
   };
 
@@ -397,11 +403,28 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
             </button>
           </div>
 
-          {mainTab === 'fotos' ? (
-            <PhotoGallery obraId={obra.id_obra} />
-          ) : (
-            <ObraMateriaisTab idObra={obra.id_obra} />
+          {/* Feedback Banner Inline */}
+          {feedbackBanner && (
+            <div
+              className={`p-3.5 rounded-xl border text-xs font-bold flex items-center gap-2 animate-in fade-in slide-in-from-top-2 ${
+                feedbackBanner.type === 'success'
+                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                  : 'bg-rose-500/15 border-rose-500/30 text-rose-400'
+              }`}
+            >
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{feedbackBanner.message}</span>
+            </div>
           )}
+
+          {/* Manter abas montadas em memória para NUNCA perder rascunho de materiais */}
+          <div className={mainTab === 'fotos' ? 'block' : 'hidden'}>
+            <PhotoGallery obraId={obra.id_obra} />
+          </div>
+
+          <div className={mainTab === 'materiais' ? 'block' : 'hidden'}>
+            <ObraMateriaisTab idObra={obra.id_obra} obra={obra} />
+          </div>
 
           {/* Observações Editáveis */}
           <Card className="p-4 sm:p-5 border-zinc-800 bg-zinc-900/90 space-y-3 shadow-md">

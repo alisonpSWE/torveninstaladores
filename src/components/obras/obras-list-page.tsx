@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import Link from 'next/link';
 import { useObras, usePerfil } from '@/lib/query/hooks';
 import { usePendingPhotosSummary } from '@/lib/sync-engine';
@@ -21,10 +21,37 @@ import {
   Package,
 } from 'lucide-react';
 
+/**
+ * Função utilitária pura para determinar se uma obra está em andamento/ativa
+ * ou se já foi finalizada, enviada para vistoria, homologada ou cancelada.
+ */
+export function isObraEmAndamento(statusStr?: string | null): boolean {
+  if (!statusStr) return true;
+  const s = statusStr.toLowerCase().trim();
+
+  // Statuses que representam obras concluídas, em vistoria, homologadas ou finalizadas
+  if (
+    s.includes('vistoria') ||
+    s.includes('conclu') ||
+    s.includes('finaliz') ||
+    s.includes('homologad') ||
+    s.includes('cancel') ||
+    s.includes('bloquead') ||
+    s.includes('ligad') ||
+    s.includes('entregue') ||
+    s.includes('aprovad')
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 export function ObrasListPage() {
   const [mounted, setMounted] = useState(false);
   const [search, setSearch] = useState('');
-  const [adminTab, setAdminTab] = useState<'em_andamento' | 'todas'>('em_andamento');
+  const deferredSearch = useDeferredValue(search);
+  const [activeTab, setActiveTab] = useState<'em_andamento' | 'concluidas' | 'todas'>('em_andamento');
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [idsToImport, setIdsToImport] = useState('');
   const [isImporting, setIsImporting] = useState(false);
@@ -44,13 +71,33 @@ export function ObrasListPage() {
   // Monitor reativo de fotos e materiais salvos no IndexedDB local
   const { totalPending, pendingByObra, isSyncing, isOnline, syncAll } = usePendingPhotosSummary();
 
-  // Se não for admin, ou se a aba 'em_andamento' estiver ativa, oculta 'Vistoria Solicitada'
-  const shouldExcludeVistoria = !isAdmin || adminTab === 'em_andamento';
-
-  const { data: obras, isLoading, isFetching, refetch } = useObras({
-    searchQuery: search,
-    excludeStatus: shouldExcludeVistoria ? 'Vistoria Solicitada' : undefined,
+  // Busca obras com base na pesquisa por texto diferida
+  const { data: rawObras, isLoading, isFetching, refetch } = useObras({
+    searchQuery: deferredSearch,
   });
+
+  // Separação analítica em tempo real das obras
+  const { emAndamentoObras, concluidasObras, totalObras } = useMemo(() => {
+    const list = rawObras || [];
+    const andamento = list.filter((o) => isObraEmAndamento(o.status));
+    const concluidas = list.filter((o) => !isObraEmAndamento(o.status));
+    return {
+      emAndamentoObras: andamento,
+      concluidasObras: concluidas,
+      totalObras: list,
+    };
+  }, [rawObras]);
+
+  // Lista efetivamente renderizada conforme a aba ativa
+  const displayedObras = useMemo(() => {
+    if (activeTab === 'em_andamento') {
+      return emAndamentoObras;
+    }
+    if (activeTab === 'concluidas') {
+      return concluidasObras;
+    }
+    return totalObras;
+  }, [activeTab, emAndamentoObras, concluidasObras, totalObras]);
 
   const handleBatchImport = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,8 +142,8 @@ export function ObrasListPage() {
       });
 
       setIdsToImport('');
-      // Ao importar manualmente, alterna para a visão 'todas' para garantir visualização de qualquer status
-      setAdminTab('todas');
+      // Ao importar manualmente, alterna para a visão 'todas' para garantir visualização
+      setActiveTab('todas');
       refetch();
     } catch (err: any) {
       setFeedback({ type: 'error', message: err.message || 'Erro de conexão ao importar obras.' });
@@ -159,38 +206,81 @@ export function ObrasListPage() {
             </div>
           </div>
 
-          {/* Abas de Filtro para Administradores (Em Andamento vs Todas) */}
-          {isAdmin && (
-            <div role="tablist" aria-label="Filtro de status de obras" className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800 text-xs font-bold w-full">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={adminTab === 'em_andamento'}
-                onClick={() => setAdminTab('em_andamento')}
-                className={`flex-1 min-h-[44px] px-3 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-                  adminTab === 'em_andamento'
-                    ? 'bg-[#ffc61e] text-black shadow-md font-extrabold'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
+          {/* Abas de Filtro com Contadores Reais em Tempo Real */}
+          <div
+            role="tablist"
+            aria-label="Filtro de status de obras"
+            className="grid grid-cols-3 gap-1 bg-zinc-950 p-1 rounded-2xl border border-zinc-800 text-xs font-bold w-full shadow-inner"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'em_andamento'}
+              onClick={() => setActiveTab('em_andamento')}
+              className={`min-h-[44px] px-2 sm:px-3 py-2 rounded-xl transition-colors flex items-center justify-center gap-1.5 ${
+                activeTab === 'em_andamento'
+                  ? 'bg-[#ffc61e] text-black shadow-md font-extrabold'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
+              }`}
+            >
+              <span className="truncate">Em Andamento</span>
+              <span
+                className={`font-mono tabular-nums text-xs px-1.5 py-0.5 rounded-md font-black shrink-0 ${
+                  activeTab === 'em_andamento'
+                    ? 'bg-black text-[#ffc61e]'
+                    : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
                 }`}
               >
-                <span>Em Andamento</span>
-              </button>
+                {emAndamentoObras.length}
+              </span>
+            </button>
 
-              <button
-                type="button"
-                role="tab"
-                aria-selected={adminTab === 'todas'}
-                onClick={() => setAdminTab('todas')}
-                className={`flex-1 min-h-[44px] px-3 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-                  adminTab === 'todas'
-                    ? 'bg-[#ffc61e] text-black shadow-md font-extrabold'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'concluidas'}
+              onClick={() => setActiveTab('concluidas')}
+              className={`min-h-[44px] px-2 sm:px-3 py-2 rounded-xl transition-colors flex items-center justify-center gap-1.5 ${
+                activeTab === 'concluidas'
+                  ? 'bg-[#ffc61e] text-black shadow-md font-extrabold'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
+              }`}
+            >
+              <span className="truncate">Concluídas</span>
+              <span
+                className={`font-mono tabular-nums text-xs px-1.5 py-0.5 rounded-md font-black shrink-0 ${
+                  activeTab === 'concluidas'
+                    ? 'bg-black text-[#ffc61e]'
+                    : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
                 }`}
               >
-                <span>Todas as Obras (Admin)</span>
-              </button>
-            </div>
-          )}
+                {concluidasObras.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'todas'}
+              onClick={() => setActiveTab('todas')}
+              className={`min-h-[44px] px-2 sm:px-3 py-2 rounded-xl transition-colors flex items-center justify-center gap-1.5 ${
+                activeTab === 'todas'
+                  ? 'bg-[#ffc61e] text-black shadow-md font-extrabold'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
+              }`}
+            >
+              <span className="truncate">Todas</span>
+              <span
+                className={`font-mono tabular-nums text-xs px-1.5 py-0.5 rounded-md font-black shrink-0 ${
+                  activeTab === 'todas'
+                    ? 'bg-black text-[#ffc61e]'
+                    : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
+                }`}
+              >
+                {totalObras.length}
+              </span>
+            </button>
+          </div>
 
           {/* Input de Busca com Foco em Alto Contraste */}
           <div className="relative">
@@ -265,61 +355,76 @@ export function ObrasListPage() {
           </div>
         )}
 
-        {!mounted || isLoading ? (
-          <div className="space-y-3.5 pt-1">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-36 rounded-xl bg-zinc-900/60 border border-zinc-800/60 animate-pulse p-4 space-y-3">
-                <div className="flex justify-between">
-                  <div className="h-4 w-24 bg-zinc-800 rounded"></div>
-                  <div className="h-6 w-16 bg-zinc-800 rounded-full"></div>
+        {/* Lista de Obras com Altura Mínima Estável para Evitar Saltos */}
+        <div className="min-h-[480px]">
+          {!mounted || isLoading ? (
+            <div className="space-y-3.5 pt-1">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-36 rounded-xl bg-zinc-900/60 border border-zinc-800/60 animate-pulse p-4 space-y-3">
+                  <div className="flex justify-between">
+                    <div className="h-4 w-24 bg-zinc-800 rounded"></div>
+                    <div className="h-6 w-16 bg-zinc-800 rounded-full"></div>
+                  </div>
+                  <div className="h-6 w-3/4 bg-zinc-800 rounded"></div>
+                  <div className="h-4 w-1/2 bg-zinc-800 rounded"></div>
                 </div>
-                <div className="h-6 w-3/4 bg-zinc-800 rounded"></div>
-                <div className="h-4 w-1/2 bg-zinc-800 rounded"></div>
-              </div>
-            ))}
-          </div>
-        ) : obras && obras.length > 0 ? (
-          <div className="space-y-3.5">
-            <div className="flex items-center justify-between text-xs text-zinc-400 px-1 font-medium">
-              <span>
-                {obras.length} {obras.length === 1 ? 'obra encontrada' : 'obras encontradas'}
-                {isAdmin && adminTab === 'todas' && ' (Visão Completa)'}
-              </span>
-            </div>
-            <div className="flex flex-col space-y-3.5">
-              {obras.map((obra) => (
-                <ObraCard
-                  key={obra.id_obra}
-                  obra={obra}
-                  pendingPhotosCount={pendingByObra[obra.id_obra] || 0}
-                />
               ))}
             </div>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 shadow-inner">
-              <Sun className="w-8 h-8 text-[#ffc61e]/60" />
+          ) : displayedObras.length > 0 ? (
+            <div className="space-y-3.5">
+              <div className="flex items-center justify-between text-xs text-zinc-400 px-1 font-medium">
+                <span>
+                  {displayedObras.length} {displayedObras.length === 1 ? 'obra exibida' : 'obras exibidas'}
+                  {activeTab === 'em_andamento'
+                    ? ' (Em Andamento)'
+                    : activeTab === 'concluidas'
+                    ? ' (Concluídas / Vistoria)'
+                    : ' (Visão Completa)'}
+                </span>
+              </div>
+              <div className="flex flex-col space-y-3.5">
+                {displayedObras.map((obra) => (
+                  <ObraCard
+                    key={obra.id_obra}
+                    obra={obra}
+                    pendingPhotosCount={pendingByObra[obra.id_obra] || 0}
+                  />
+                ))}
+              </div>
             </div>
-            <div className="space-y-1 max-w-xs">
-              <h3 className="text-base font-bold text-zinc-200">
-                {search ? 'Nenhuma obra encontrada' : 'Nenhuma obra cadastrada'}
-              </h3>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                {search
-                  ? 'Tente buscar com outros termos de cliente, cidade ou ID.'
-                  : isAdmin
-                  ? 'Importe obras do CRM Groner usando o botão "+" abaixo.'
-                  : 'Aguarde o envio das obras pelo escritório.'}
-              </p>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 shadow-inner">
+                <Sun className="w-8 h-8 text-[#ffc61e]/60" />
+              </div>
+              <div className="space-y-1 max-w-xs">
+                <h3 className="text-base font-bold text-zinc-200">
+                  {search
+                    ? 'Nenhuma obra encontrada na busca'
+                    : activeTab === 'concluidas'
+                    ? 'Nenhuma obra concluída no momento'
+                    : activeTab === 'todas'
+                    ? 'Nenhuma obra cadastrada no sistema'
+                    : 'Nenhuma obra em andamento no momento'}
+                </h3>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  {search
+                    ? 'Tente buscar com outros termos de cliente, cidade ou ID.'
+                    : activeTab === 'concluidas'
+                    ? 'As obras finalizadas, com vistoria concluída ou homologadas aparecerão aqui.'
+                    : activeTab === 'todas'
+                    ? 'Você pode importar novas obras pelo botão "+" ou aguardar atualizações.'
+                    : 'Todas as obras ativas já foram concluídas ou aguardam novas ordens de serviço.'}
+                </p>
+              </div>
+              {!search && isAdmin && (
+                <Button onClick={() => setImportDialogOpen(true)} variant="default" size="sm" className="min-h-[48px] px-5">
+                  <Plus className="w-4 h-4 mr-1.5" /> Importar Obra(s)
+                </Button>
+              )}
             </div>
-            {!search && isAdmin && (
-              <Button onClick={() => setImportDialogOpen(true)} variant="default" size="sm" className="min-h-[48px] px-5">
-                <Plus className="w-4 h-4 mr-1.5" /> Importar Obra(s)
-              </Button>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </main>
 
       {/* Floating Action Button (FAB) exclusivo para Administradores */}
@@ -371,7 +476,7 @@ export function ObrasListPage() {
               >
                 <p>{feedback.message}</p>
                 {feedback.errors && feedback.errors.length > 0 && (
-                  <ul className="mt-1.5 list-disc list-inside space-y-0.5 text-[11px]">
+                  <ul className="mt-1.5 list-disc list-inside space-y-0.5 text-xs">
                     {feedback.errors.map((err) => (
                       <li key={err.id}>
                         Obra #{err.id}: {err.message}

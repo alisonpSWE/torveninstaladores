@@ -576,7 +576,7 @@ export function EstoqueAdminDashboard() {
                 key={cat}
                 type="button"
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all min-h-[38px] flex items-center justify-center ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors min-h-[38px] flex items-center justify-center ${
                   selectedCategory === cat
                     ? 'bg-[#ffc61e] text-black shadow-md'
                     : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
@@ -588,54 +588,56 @@ export function EstoqueAdminDashboard() {
           </div>
         </div>
 
-        {/* Tabela ou Grade de Produtos */}
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-20 space-y-3">
-            <Loader2 className="w-8 h-8 animate-spin text-[#ffc61e]" />
-            <p className="text-xs text-zinc-400 font-semibold">Carregando catálogo de materiais...</p>
-          </div>
-        ) : isError ? (
-          <div className="text-center py-16 bg-rose-950/20 rounded-2xl border border-rose-800/50 p-6 space-y-3">
-            <AlertOctagon className="w-10 h-10 text-rose-500 mx-auto" />
-            <h3 className="text-sm font-bold text-rose-200">Falha ao carregar o catálogo de estoque</h3>
-            <p className="text-xs text-zinc-400 max-w-md mx-auto">
-              {(error as Error)?.message || 'Erro de conexão com o banco de dados. Verifique sua rede e tente novamente.'}
-            </p>
-            <Button
-              type="button"
-              onClick={() => refetch()}
-              className="h-9 bg-[#ffc61e] hover:bg-[#e5b010] text-black font-extrabold text-xs rounded-xl px-4 inline-flex items-center gap-1.5 shadow-md"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Tentar Novamente</span>
-            </Button>
-          </div>
-        ) : filteredProdutos.length === 0 ? (
-          <div className="text-center py-16 bg-zinc-950/40 rounded-2xl border border-dashed border-zinc-800 p-6 space-y-2">
-            <Package className="w-10 h-10 text-zinc-600 mx-auto" />
-            <h3 className="text-sm font-bold text-zinc-300">Nenhum material encontrado</h3>
-            <p className="text-xs text-zinc-500">Tente ajustar seus termos de busca ou filtros de categoria.</p>
-          </div>
-        ) : viewMode === 'table' ? (
-          <EstoqueDataTable
-            produtos={filteredProdutos}
-            selectedIds={selectedIds}
-            onToggleSelect={handleToggleSelect}
-            onSelectAll={handleSelectAll}
-            onOpenKardex={(prod) => setKardexProduct(prod)}
-            onOpenAdjust={openAdjustDialog}
-            onToast={showToast}
-          />
-        ) : (
-          <EstoqueGridView
-            produtos={filteredProdutos}
-            selectedIds={selectedIds}
-            onToggleSelect={handleToggleSelect}
-            onOpenKardex={(prod) => setKardexProduct(prod)}
-            onOpenAdjust={openAdjustDialog}
-            onToast={showToast}
-          />
-        )}
+        {/* Tabela ou Grade de Produtos com Altura Mínima Estável */}
+        <div className="min-h-[480px]">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-20 space-y-3">
+              <Loader2 className="w-8 h-8 animate-spin text-[#ffc61e]" />
+              <p className="text-xs text-zinc-400 font-semibold">Carregando catálogo de materiais...</p>
+            </div>
+          ) : isError ? (
+            <div className="text-center py-16 bg-rose-950/20 rounded-2xl border border-rose-800/50 p-6 space-y-3">
+              <AlertOctagon className="w-10 h-10 text-rose-500 mx-auto" />
+              <h3 className="text-sm font-bold text-rose-200">Falha ao carregar o catálogo de estoque</h3>
+              <p className="text-xs text-zinc-400 max-w-md mx-auto">
+                {(error as Error)?.message || 'Erro de conexão com o banco de dados. Verifique sua rede e tente novamente.'}
+              </p>
+              <Button
+                type="button"
+                onClick={() => refetch()}
+                className="h-9 bg-[#ffc61e] hover:bg-[#e5b010] text-black font-extrabold text-xs rounded-xl px-4 inline-flex items-center gap-1.5 shadow-md"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Tentar Novamente</span>
+              </Button>
+            </div>
+          ) : filteredProdutos.length === 0 ? (
+            <div className="text-center py-16 bg-zinc-950/40 rounded-2xl border border-dashed border-zinc-800 p-6 space-y-2">
+              <Package className="w-10 h-10 text-zinc-600 mx-auto" />
+              <h3 className="text-sm font-bold text-zinc-300">Nenhum material encontrado</h3>
+              <p className="text-xs text-zinc-500">Tente ajustar seus termos de busca ou filtros de categoria.</p>
+            </div>
+          ) : viewMode === 'table' ? (
+            <EstoqueDataTable
+              produtos={filteredProdutos}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
+              onSelectAll={handleSelectAll}
+              onOpenKardex={(prod) => setKardexProduct(prod)}
+              onOpenAdjust={openAdjustDialog}
+              onToast={showToast}
+            />
+          ) : (
+            <EstoqueGridView
+              produtos={filteredProdutos}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
+              onOpenKardex={(prod) => setKardexProduct(prod)}
+              onOpenAdjust={openAdjustDialog}
+              onToast={showToast}
+            />
+          )}
+        </div>
       </main>
 
       {/* Barra Flutuante de Ações em Lote (Bulk Actions) */}

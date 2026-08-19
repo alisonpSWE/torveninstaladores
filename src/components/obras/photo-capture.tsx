@@ -57,7 +57,7 @@ export function PhotoCapture({ obraId }: PhotoCaptureProps) {
                 className="w-full h-full object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end justify-center p-2">
-                <span className="text-[10px] font-extrabold text-black bg-[#ffc61e] px-2 py-0.5 rounded shadow">
+                <span className="text-xs font-extrabold text-black bg-[#ffc61e] px-2 py-0.5 rounded shadow">
                   Pendente
                 </span>
               </div>

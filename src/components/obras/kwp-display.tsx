@@ -15,7 +15,7 @@ export function KwpDisplay({ value, className = '' }: KwpDisplayProps) {
         <Zap className="w-3.5 h-3.5 fill-[#ffc61e]/20 text-[#ffc61e]" />
         <span>{formattedValue}</span>
       </div>
-      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mt-0.5">kWp Total</span>
+      <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider mt-0.5">kWp Total</span>
     </div>
   );
 }

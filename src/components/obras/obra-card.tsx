@@ -24,7 +24,7 @@ export function ObraCard({ obra, pendingPhotosCount = 0 }: ObraCardProps) {
           {/* Header Row: ID + Status vs kWp */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-              <span className="font-mono text-[11px] text-[#ffc61e] bg-[#ffc61e]/15 px-2 py-0.5 rounded-md border border-[#ffc61e]/30 font-bold tracking-tight">
+              <span className="font-mono text-xs text-[#ffc61e] bg-[#ffc61e]/15 px-2 py-0.5 rounded-md border border-[#ffc61e]/30 font-bold tracking-tight">
                 #{obra.id_obra}
               </span>
               <ObraStatusBadge status={obra.status} />
@@ -47,7 +47,7 @@ export function ObraCard({ obra, pendingPhotosCount = 0 }: ObraCardProps) {
           {/* Compact Technical Micro-Badges */}
           <div className="flex items-center gap-1.5 flex-wrap">
             {obra.qtd_modulos > 0 && (
-              <div className="inline-flex items-center gap-1 text-[11px] text-zinc-300 bg-zinc-950/80 border border-zinc-800/80 px-2 py-0.5 rounded-md font-medium">
+              <div className="inline-flex items-center gap-1 text-xs text-zinc-300 bg-zinc-950/80 border border-zinc-800/80 px-2 py-0.5 rounded-md font-medium">
                 <Layers className="w-3 h-3 text-[#ffc61e]/90 shrink-0" />
                 <span>
                   {obra.qtd_modulos} mód.
@@ -57,14 +57,14 @@ export function ObraCard({ obra, pendingPhotosCount = 0 }: ObraCardProps) {
             )}
 
             {obra.tipo_telhado && obra.tipo_telhado !== 'Sem dados' && (
-              <div className="inline-flex items-center gap-1 text-[11px] text-zinc-300 bg-zinc-950/80 border border-zinc-800/80 px-2 py-0.5 rounded-md font-medium">
+              <div className="inline-flex items-center gap-1 text-xs text-zinc-300 bg-zinc-950/80 border border-zinc-800/80 px-2 py-0.5 rounded-md font-medium">
                 <Home className="w-3 h-3 text-zinc-400 shrink-0" />
                 <span>{obra.tipo_telhado}</span>
               </div>
             )}
 
             {obra.potencia_inversor_kw > 0 && (
-              <div className="inline-flex items-center gap-1 text-[11px] text-zinc-300 bg-zinc-950/80 border border-zinc-800/80 px-2 py-0.5 rounded-md font-medium">
+              <div className="inline-flex items-center gap-1 text-xs text-zinc-300 bg-zinc-950/80 border border-zinc-800/80 px-2 py-0.5 rounded-md font-medium">
                 <Cpu className="w-3 h-3 text-zinc-400 shrink-0" />
                 <span>Inv. {obra.potencia_inversor_kw}kW</span>
               </div>
@@ -75,7 +75,7 @@ export function ObraCard({ obra, pendingPhotosCount = 0 }: ObraCardProps) {
         {/* Footer Action Bar com Badge de Fotos Offline */}
         <div className="flex items-center justify-between text-xs pt-2 border-t border-zinc-800/70 mt-2.5">
           {pendingPhotosCount > 0 ? (
-            <div className="inline-flex items-center gap-1 text-[11px] font-extrabold text-amber-300 bg-amber-500/20 border border-amber-500/50 px-2 py-0.5 rounded-md animate-pulse">
+            <div className="inline-flex items-center gap-1 text-xs font-extrabold text-amber-300 bg-amber-500/20 border border-amber-500/50 px-2 py-0.5 rounded-md animate-pulse">
               <Camera className="w-3 h-3 text-amber-400 shrink-0" />
               <span>⚠️ {pendingPhotosCount} foto{pendingPhotosCount > 1 ? 's' : ''} local</span>
             </div>

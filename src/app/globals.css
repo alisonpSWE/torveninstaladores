@@ -38,6 +38,12 @@
   }
 }
 
+html {
+  scrollbar-gutter: stable;
+  overflow-y: scroll;
+  scroll-behavior: smooth;
+}
+
 body {
   background-color: #09090b;
   color: #f4f4f5;
@@ -57,7 +63,7 @@ body {
 }
 ::-webkit-scrollbar-thumb {
   background: #27272a;
-  border-radius: 3px;
+  border-radius: 8px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #3f3f46;

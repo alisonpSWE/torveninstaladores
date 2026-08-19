@@ -1,6 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
-import { Obra, ObraPhoto, Perfil } from '@/lib/supabase/types';
+import {
+  Obra,
+  ObraPhoto,
+  Perfil,
+  EstoqueProduto,
+  ObraMaterialComProduto,
+} from '@/lib/supabase/types';
 import { deleteObraPhoto, DeletePhotoParams } from '@/lib/actions/delete-photo';
 
 export interface UseObrasOptions {
@@ -59,36 +65,44 @@ export function useObras(options: UseObrasOptions | string = '') {
 export function usePerfil() {
   const supabase = createClient();
 
-  return useQuery<Perfil | null>({
-    queryKey: ['user-perfil'],
+  return useQuery({
+    queryKey: ['perfil-usuario'],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-      const { data, error } = await (supabase.from('perfis' as any) as any)
+      if (userError || !user) {
+        return null;
+      }
+
+      const { data, error } = await supabase
+        .from('perfis')
         .select('*')
         .eq('id', user.id)
         .single();
 
       if (error) {
-        console.warn('[USE PERFIL] Perfil não encontrado:', error.message);
+        console.warn('Perfil do usuário não encontrado:', error.message);
         return null;
       }
 
       return data as Perfil;
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 5, // 5 minutos de cache
   });
 }
 
 export function useObra(idObra: number | string) {
-  const supabase = createClient();
   const numId = Number(idObra);
+  const supabase = createClient();
 
   return useQuery({
     queryKey: ['obra', numId],
     queryFn: async () => {
-      if (isNaN(numId)) return null;
+      if (!numId) return null;
+
       const { data, error } = await supabase
         .from('obras')
         .select('*')
@@ -98,62 +112,52 @@ export function useObra(idObra: number | string) {
       if (error) {
         throw new Error(error.message);
       }
-      return (data as Obra) || null;
+      return data as Obra;
     },
-    enabled: !isNaN(numId) && numId > 0,
-    refetchOnWindowFocus: true,
+    enabled: !!numId,
   });
 }
 
-export interface ObraPhotosData {
-  registroPhotos: ObraPhoto[];
-  projetoPhotos: ObraPhoto[];
-  projetoPhotosBySubcategory: Record<string, ObraPhoto[]>;
-  allPhotos: ObraPhoto[];
-}
-
 export function useObraPhotos(idObra: number | string) {
-  const supabase = createClient();
   const numId = Number(idObra);
+  const supabase = createClient();
 
-  return useQuery<ObraPhotosData>({
+  return useQuery({
     queryKey: ['obra-photos', numId],
     queryFn: async () => {
-      if (!numId || isNaN(numId)) {
-        return { registroPhotos: [], projetoPhotos: [], projetoPhotosBySubcategory: {}, allPhotos: [] };
-      }
-      const { data, error } = await (supabase.from('obra_photos' as any) as any)
+      if (!numId) return { registroPhotos: [], projetoPhotos: [], projetoPhotosBySubcategory: {}, allPhotos: [] };
+
+      const { data, error } = await supabase
+        .from('obra_photos' as any)
         .select('*')
         .eq('id_obra', numId)
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.warn(`[USE OBRA PHOTOS] Aviso ao buscar fotos da obra #${numId}:`, error.message);
-        return { registroPhotos: [], projetoPhotos: [], projetoPhotosBySubcategory: {}, allPhotos: [] };
+        throw new Error(error.message);
       }
 
-      const allPhotos = (data || []) as ObraPhoto[];
-      const registroPhotos = allPhotos.filter(
-        (photo) => !photo.category || photo.category === 'registro'
-      );
-      const projetoPhotos = allPhotos.filter(
-        (photo) => photo.category === 'projeto'
-      );
+      const all = (data as unknown as ObraPhoto[]) || [];
+      const registro = all.filter((p) => p.category === 'registro' || !p.category);
+      const projeto = all.filter((p) => p.category === 'projeto');
 
-      const projetoPhotosBySubcategory: Record<string, ObraPhoto[]> = {};
-      for (const photo of projetoPhotos) {
-        const subcat = photo.subcategory || 'geral';
-        if (!projetoPhotosBySubcategory[subcat]) {
-          projetoPhotosBySubcategory[subcat] = [];
+      const bySubcat: Record<string, ObraPhoto[]> = {};
+      projeto.forEach((photo) => {
+        const sub = photo.subcategory || 'geral';
+        if (!bySubcat[sub]) {
+          bySubcat[sub] = [];
         }
-        projetoPhotosBySubcategory[subcat].push(photo);
-      }
+        bySubcat[sub].push(photo);
+      });
 
-      return { registroPhotos, projetoPhotos, projetoPhotosBySubcategory, allPhotos };
+      return {
+        registroPhotos: registro,
+        projetoPhotos: projeto,
+        projetoPhotosBySubcategory: bySubcat,
+        allPhotos: all,
+      };
     },
-    enabled: !isNaN(numId) && numId > 0,
-    refetchInterval: 5000,
-    refetchOnWindowFocus: true,
+    enabled: !!numId,
   });
 }
 
@@ -162,15 +166,11 @@ export function useDeletePhoto() {
 
   return useMutation({
     mutationFn: async (params: DeletePhotoParams) => {
-      const result = await deleteObraPhoto(params);
-      if (!result.success) {
-        throw new Error(result.error || 'Falha ao excluir foto.');
-      }
-      return params;
+      return await deleteObraPhoto(params);
     },
-    onSuccess: (params) => {
-      queryClient.invalidateQueries({ queryKey: ['obra-photos', Number(params.idObra)] });
-      queryClient.invalidateQueries({ queryKey: ['obra-photos-projeto', Number(params.idObra)] });
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['obra-photos', Number(variables.idObra)] });
+      queryClient.invalidateQueries({ queryKey: ['offline-photos', Number(variables.idObra)] });
     },
   });
 }
@@ -180,23 +180,23 @@ export function useImportObra() {
 
   return useMutation({
     mutationFn: async (idObra: number) => {
-      const response = await fetch('/api/import-obra', {
+      const response = await fetch('/api/webhooks/groner', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({ id_obra: idObra }),
       });
 
-      const resData = await response.json();
       if (!response.ok) {
-        throw new Error(resData.error || 'Falha ao importar obra.');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Falha ao importar obra #${idObra}`);
       }
-      return resData.obra as Obra;
+
+      return await response.json();
     },
-    onSuccess: (newObra) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['obras'] });
-      if (newObra?.id_obra) {
-        queryClient.setQueryData(['obra', newObra.id_obra], newObra);
-      }
     },
   });
 }
@@ -206,17 +206,16 @@ export function useSyncObraWithGroner() {
 
   return useMutation({
     mutationFn: async (idObra: number) => {
-      const response = await fetch('/api/import-obra', {
+      const response = await fetch(`/api/obras/${idObra}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [idObra] }),
       });
 
-      const resData = await response.json();
       if (!response.ok) {
-        throw new Error(resData.error || 'Falha ao sincronizar com o Groner CRM.');
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `Erro ao sincronizar com o Groner para a obra #${idObra}`);
       }
-      return resData;
+
+      return await response.json();
     },
     onSuccess: (_, idObra) => {
       queryClient.invalidateQueries({ queryKey: ['obras'] });
@@ -299,6 +298,361 @@ export function useUpdateObraObservacoes() {
       if (data?.id_obra) {
         queryClient.setQueryData(['obra', data.id_obra], data);
       }
+    },
+  });
+}
+
+// ============================================================================
+// HOOKS: GESTÃO DE ESTOQUE E CONSUMO DE MATERIAIS
+// ============================================================================
+
+export function useEstoqueProdutos() {
+  const supabase = createClient();
+
+  return useQuery({
+    queryKey: ['estoque-produtos'],
+    queryFn: async () => {
+      const { data, error } = await (supabase.from('estoque_produtos') as any)
+        .select('*')
+        .order('categoria')
+        .order('nome');
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      return (data as EstoqueProduto[]) || [];
+    },
+    refetchInterval: 10000,
+  });
+}
+
+export function useObraMateriais(idObra: number | string) {
+  const numId = Number(idObra);
+  const supabase = createClient();
+
+  return useQuery({
+    queryKey: ['obra-materiais', numId],
+    queryFn: async () => {
+      if (!numId) return [];
+
+      const { data, error } = await (supabase.from('obra_materiais') as any)
+        .select('*, produto:estoque_produtos(*), perfil:perfis(*)')
+        .eq('id_obra', numId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      return (data as ObraMaterialComProduto[]) || [];
+    },
+    enabled: !!numId,
+    refetchInterval: 10000,
+  });
+}
+
+export function useEstoqueKardex(idProduto?: string) {
+  const supabase = createClient();
+
+  return useQuery({
+    queryKey: ['estoque-kardex', idProduto],
+    queryFn: async () => {
+      if (!idProduto) return [];
+
+      const { data, error } = await (supabase.from('obra_materiais') as any)
+        .select('*, obra:obras(*), perfil:perfis(*)')
+        .eq('id_produto', idProduto)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      return (data as ObraMaterialComProduto[]) || [];
+    },
+    enabled: !!idProduto,
+  });
+}
+
+export function useRegistrarMaterial() {
+  const queryClient = useQueryClient();
+  const supabase = createClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id_obra,
+      id_produto,
+      quantidade_utilizada,
+      observacoes,
+    }: {
+      id_obra: number;
+      id_produto: string;
+      quantidade_utilizada: number;
+      observacoes?: string | null;
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const { data, error } = await (supabase.from('obra_materiais') as any)
+        .insert({
+          id_obra,
+          id_produto,
+          quantidade_utilizada,
+          observacoes: observacoes || null,
+          registrado_por: user?.id || null,
+        })
+        .select('*, produto:estoque_produtos(*)')
+        .single();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['obra-materiais', variables.id_obra] });
+      queryClient.invalidateQueries({ queryKey: ['estoque-produtos'] });
+      queryClient.invalidateQueries({ queryKey: ['estoque-kardex'] });
+    },
+  });
+}
+
+export function useDeleteObraMaterial() {
+  const queryClient = useQueryClient();
+  const supabase = createClient();
+
+  return useMutation({
+    mutationFn: async ({ id, id_obra }: { id: string; id_obra: number }) => {
+      const { error } = await (supabase.from('obra_materiais') as any)
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      return id;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['obra-materiais', variables.id_obra] });
+      queryClient.invalidateQueries({ queryKey: ['estoque-produtos'] });
+      queryClient.invalidateQueries({ queryKey: ['estoque-kardex'] });
+    },
+  });
+}
+
+export function useCreateEstoqueProduto() {
+  const queryClient = useQueryClient();
+  const supabase = createClient();
+
+  return useMutation({
+    mutationFn: async (novoProduto: {
+      codigo: string;
+      nome: string;
+      categoria: string;
+      unidade: string;
+      quantidade_saldo: number;
+      estoque_minimo: number;
+      localizacao?: string;
+    }) => {
+      const { data, error } = await (supabase.from('estoque_produtos') as any)
+        .insert(novoProduto)
+        .select('*')
+        .single();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      return data as EstoqueProduto;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['estoque-produtos'] });
+    },
+  });
+}
+
+export function useUpdateEstoqueSaldo() {
+  const queryClient = useQueryClient();
+  const supabase = createClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      quantidade_saldo,
+      estoque_minimo,
+      localizacao,
+    }: {
+      id: string;
+      quantidade_saldo: number;
+      estoque_minimo?: number;
+      localizacao?: string;
+    }) => {
+      const payload: any = { quantidade_saldo };
+      if (estoque_minimo !== undefined) {
+        payload.estoque_minimo = estoque_minimo;
+      }
+      if (localizacao !== undefined) {
+        payload.localizacao = localizacao;
+      }
+
+      const { data, error } = await (supabase.from('estoque_produtos') as any)
+        .update(payload)
+        .eq('id', id)
+        .select('*')
+        .single();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      return data as EstoqueProduto;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['estoque-produtos'] });
+    },
+  });
+}
+
+export function useQuickAdjustSaldo() {
+  const queryClient = useQueryClient();
+  const supabase = createClient();
+
+  return useMutation({
+    mutationFn: async ({ id, delta, motivo }: { id: string; delta: number; motivo?: string }) => {
+      // Busca produto atual
+      const { data: prod, error: fetchErr } = await (supabase.from('estoque_produtos') as any)
+        .select('quantidade_saldo')
+        .eq('id', id)
+        .single();
+
+      if (fetchErr || !prod) {
+        throw new Error(fetchErr?.message || 'Produto não encontrado.');
+      }
+
+      const novoSaldo = Math.max(0, Number(prod.quantidade_saldo || 0) + delta);
+
+      const { data, error } = await (supabase.from('estoque_produtos') as any)
+        .update({ quantidade_saldo: novoSaldo })
+        .eq('id', id)
+        .select('*')
+        .single();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      return data as EstoqueProduto;
+    },
+    onMutate: async ({ id, delta }) => {
+      await queryClient.cancelQueries({ queryKey: ['estoque-produtos'] });
+      const previous = queryClient.getQueryData<EstoqueProduto[]>(['estoque-produtos']);
+
+      if (previous) {
+        queryClient.setQueryData<EstoqueProduto[]>(
+          ['estoque-produtos'],
+          previous.map((p) =>
+            p.id === id
+              ? { ...p, quantidade_saldo: Math.max(0, Number(p.quantidade_saldo || 0) + delta) }
+              : p
+          )
+        );
+      }
+
+      return { previous };
+    },
+    onError: (_err, _variables, context: any) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['estoque-produtos'], context.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['estoque-produtos'] });
+      queryClient.invalidateQueries({ queryKey: ['estoque-kardex'] });
+    },
+  });
+}
+
+export function useBulkUpdateCategoria() {
+  const queryClient = useQueryClient();
+  const supabase = createClient();
+
+  return useMutation({
+    mutationFn: async ({ ids, categoria }: { ids: string[]; categoria: string }) => {
+      const { data, error } = await (supabase.from('estoque_produtos') as any)
+        .update({ categoria })
+        .in('id', ids)
+        .select('*');
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      return data as EstoqueProduto[];
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['estoque-produtos'] });
+    },
+  });
+}
+
+export function useBatchUpsertEstoque() {
+  const queryClient = useQueryClient();
+  const supabase = createClient();
+
+  return useMutation({
+    mutationFn: async ({
+      items,
+      overwriteBalance,
+    }: {
+      items: Array<{
+        codigo: string;
+        nome: string;
+        categoria: string;
+        unidade: string;
+        quantidade_saldo: number;
+        estoque_minimo: number;
+        localizacao?: string;
+      }>;
+      overwriteBalance: boolean;
+    }) => {
+      if (!items || items.length === 0) return [];
+
+      let payload = items;
+
+      if (!overwriteBalance) {
+        // Busca saldo atual existente no banco para preservar
+        const { data: existing, error: fetchErr } = await (supabase.from('estoque_produtos') as any)
+          .select('codigo, quantidade_saldo');
+
+        if (!fetchErr && existing) {
+          const balanceMap = new Map<string, number>();
+          existing.forEach((p: any) => {
+            if (p.codigo) balanceMap.set(p.codigo.toUpperCase(), Number(p.quantidade_saldo));
+          });
+
+          payload = items.map((item) => {
+            const existingBalance = balanceMap.get(item.codigo.toUpperCase());
+            return {
+              ...item,
+              quantidade_saldo: existingBalance !== undefined ? existingBalance : item.quantidade_saldo,
+            };
+          });
+        }
+      }
+
+      // Upsert em lotes de 100
+      const chunkSize = 100;
+      const results = [];
+
+      for (let i = 0; i < payload.length; i += chunkSize) {
+        const chunk = payload.slice(i, i + chunkSize);
+        const { data, error } = await (supabase.from('estoque_produtos') as any)
+          .upsert(chunk, { onConflict: 'codigo' })
+          .select('*');
+
+        if (error) {
+          throw new Error(`Erro ao importar lote de produtos: ${error.message}`);
+        }
+        if (data) results.push(...data);
+      }
+
+      return results;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['estoque-produtos'] });
     },
   });
 }

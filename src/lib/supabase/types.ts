@@ -62,6 +62,34 @@ export interface ObraPhoto {
   subcategory?: ProjectSubcategoryId | string;
 }
 
+export interface EstoqueProduto {
+  id: string;
+  codigo: string;
+  nome: string;
+  categoria: string;
+  unidade: string;
+  quantidade_saldo: number;
+  estoque_minimo: number;
+  localizacao?: string | null;
+  created_at?: string;
+}
+
+export interface ObraMaterial {
+  id: string;
+  id_obra: number;
+  id_produto: string;
+  quantidade_utilizada: number;
+  observacoes?: string | null;
+  registrado_por?: string | null;
+  created_at?: string;
+}
+
+export interface ObraMaterialComProduto extends ObraMaterial {
+  produto?: EstoqueProduto | null;
+  perfil?: Perfil | null;
+  obra?: Obra | null;
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -79,6 +107,16 @@ export type Database = {
         Row: ObraPhoto;
         Insert: Omit<ObraPhoto, 'id' | 'created_at'>;
         Update: Partial<Omit<ObraPhoto, 'id' | 'created_at'>>;
+      };
+      estoque_produtos: {
+        Row: EstoqueProduto;
+        Insert: Omit<EstoqueProduto, 'id' | 'created_at'>;
+        Update: Partial<Omit<EstoqueProduto, 'id' | 'created_at'>>;
+      };
+      obra_materiais: {
+        Row: ObraMaterial;
+        Insert: Omit<ObraMaterial, 'id' | 'created_at'>;
+        Update: Partial<Omit<ObraMaterial, 'id' | 'created_at'>>;
       };
     };
   };

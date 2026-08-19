@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Obra } from '@/lib/supabase/types';
 import { PhotoGallery } from './photo-gallery';
+import { ObraMateriaisTab } from './obra-materiais-tab';
 import { ObraStatusBadge, getStatusBadgeVariant } from './obra-status-badge';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,9 +25,11 @@ import {
   CheckCircle2,
   Loader2,
   MessageSquare,
+  Camera,
+  Package,
 } from 'lucide-react';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { useObra, useSyncObraWithGroner, useUpdateObraDriveLink, useUpdateObraObservacoes } from '@/lib/query/hooks';
+import { useObra, useSyncObraWithGroner, useUpdateObraObservacoes } from '@/lib/query/hooks';
 
 interface ObraDetailPageProps {
   idObra?: string | number;
@@ -38,6 +41,7 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
   const { data: queriedObra, isLoading } = useObra(targetId);
 
   const obra = queriedObra || initialObra;
+  const [mainTab, setMainTab] = useState<'fotos' | 'materiais'>('fotos');
   const [isEditingObs, setIsEditingObs] = useState(false);
   const [obsText, setObsText] = useState('');
   const [callConfirmDialogOpen, setCallConfirmDialogOpen] = useState(false);
@@ -250,78 +254,66 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
                         Navegar GPS <ExternalLink className="w-3.5 h-3.5" />
                       </span>
                     </div>
-                    <p className="text-sm font-medium text-zinc-200 leading-snug break-words">
-                      {obra.endereco}
+                    <p className="text-xs text-zinc-200 leading-snug font-medium">
+                      {obra.endereco ? `${obra.endereco}, ${obra.cidade}` : obra.cidade}
                     </p>
                   </div>
                 </div>
               </Card>
             </a>
           ) : (
-            <Card className="p-4 bg-zinc-900/90 border-zinc-800 space-y-2 shadow-md">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <MapPin className="w-5 h-5 text-zinc-400 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="text-xs font-bold text-[#ffc61e] uppercase tracking-wider">{obra.cidade}</span>
-                    <p className="text-sm text-zinc-300">{obra.endereco}</p>
-                  </div>
-                </div>
-
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handlePanicSync}
-                  disabled={syncWithGronerMutation.isPending}
-                  className="h-9 text-xs border-[#ffc61e]/40 text-[#ffc61e] hover:bg-[#ffc61e]/10 shrink-0 min-h-[44px]"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 mr-1 ${syncWithGronerMutation.isPending ? 'animate-spin' : ''}`} />
-                  Buscar Endereço
-                </Button>
-              </div>
+            <Card className="p-4 bg-zinc-900/50 border-zinc-800 text-zinc-400 text-xs flex items-center justify-between">
+              <span>Coordenadas GPS não cadastradas.</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handlePanicSync}
+                disabled={syncWithGronerMutation.isPending}
+                className="h-9 text-xs border-[#ffc61e]/40 text-[#ffc61e] min-h-[44px]"
+              >
+                Buscar CRM
+              </Button>
             </Card>
           )}
         </section>
 
-        {/* BLOCO 2: Especificações de Engenharia */}
+        {/* BLOCO 2: Dados Técnicos da Instalação */}
         <section className="space-y-2.5">
           <h2 className="text-sm font-extrabold text-white flex items-center gap-2 px-0.5">
-            <Zap className="w-4 h-4 text-[#ffc61e]" /> Especificações de Engenharia
+            <Zap className="w-4 h-4 text-[#ffc61e]" /> Especificações Técnicas
           </h2>
 
-          <Card className="p-4 sm:p-5 border-zinc-800 bg-zinc-900/90 space-y-4 shadow-md">
+          <Card className="p-4 bg-zinc-900/90 border-zinc-800 space-y-4 shadow-md">
+            {/* Potência Total & Tipo de Ligação */}
             <div className="grid grid-cols-2 gap-3 pb-3 border-b border-zinc-800">
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-bold uppercase tracking-wider">
-                  <Zap className="w-3.5 h-3.5 text-[#ffc61e]" /> Potência Total
-                </div>
-                <p className="text-2xl font-extrabold text-[#ffc61e]">
-                  {obra.potencia_total_kwp ? obra.potencia_total_kwp.toFixed(2) : '0'} <span className="text-xs font-bold text-zinc-400">kWp</span>
+              <div className="space-y-0.5">
+                <span className="text-xs text-zinc-400 font-semibold uppercase tracking-wider">Potência do Sistema</span>
+                <p className="text-lg font-black text-[#ffc61e] font-mono">
+                  {obra.potencia_total_kwp ? `${obra.potencia_total_kwp} kWp` : 'Sem dados'}
                 </p>
               </div>
 
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-bold uppercase tracking-wider">
-                  <Layers className="w-3.5 h-3.5 text-zinc-400" /> Rede / Ligação
-                </div>
-                <p className="text-base font-bold text-white pt-1">
-                  {obra.tipo_ligacao || 'Não definida'}
+              <div className="space-y-0.5">
+                <span className="text-xs text-zinc-400 font-semibold uppercase tracking-wider">Tipo de Ligação</span>
+                <p className="text-sm font-bold text-white">
+                  {obra.tipo_ligacao || 'Não informado'}
                 </p>
               </div>
             </div>
 
             {/* Inversor */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-300 uppercase tracking-wider">
-                <Cpu className="w-4 h-4 text-[#ffc61e]" /> Inversor Solar
+            <div className="space-y-2 bg-zinc-950/80 p-3.5 rounded-xl border border-zinc-800/80">
+              <div className="flex items-center gap-2 text-xs font-bold text-white">
+                <Cpu className="w-4 h-4 text-[#ffc61e]" />
+                <span>Inversor Solar</span>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs bg-zinc-950/80 p-3.5 rounded-xl border border-zinc-800/90">
+              <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
                   <span className="text-zinc-400 block font-medium">Marca</span>
                   <span className="font-semibold text-zinc-200">{obra.inversor_marca || '—'}</span>
                 </div>
                 <div>
-                  <span className="text-zinc-400 block font-medium">Potência Inversor</span>
+                  <span className="text-zinc-400 block font-medium">Potência</span>
                   <span className="font-semibold text-zinc-200">{obra.potencia_inversor_kw ? `${obra.potencia_inversor_kw} kW` : '—'}</span>
                 </div>
                 <div className="col-span-2 pt-2 border-t border-zinc-800/60">
@@ -331,20 +323,16 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
               </div>
             </div>
 
-            {/* Módulos */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs font-bold text-zinc-300 uppercase tracking-wider">
-                <div className="flex items-center gap-1.5">
-                  <Zap className="w-4 h-4 text-[#ffc61e]" /> Módulos Fotovoltaicos
-                </div>
-                <span className="text-[#ffc61e] font-mono font-bold bg-[#ffc61e]/15 px-2.5 py-0.5 rounded-md border border-[#ffc61e]/30">
-                  {obra.qtd_modulos} placas
-                </span>
+            {/* Módulos Fotovoltaicos */}
+            <div className="space-y-2 bg-zinc-950/80 p-3.5 rounded-xl border border-zinc-800/80">
+              <div className="flex items-center gap-2 text-xs font-bold text-white">
+                <Layers className="w-4 h-4 text-[#ffc61e]" />
+                <span>Módulos Fotovoltaicos</span>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs bg-zinc-950/80 p-3.5 rounded-xl border border-zinc-800/90">
+              <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <span className="text-zinc-400 block font-medium">Marca Placa</span>
-                  <span className="font-semibold text-zinc-200">{obra.modulos_marca || '—'}</span>
+                  <span className="text-zinc-400 block font-medium">Quantidade</span>
+                  <span className="font-semibold text-zinc-200">{obra.qtd_modulos ? `${obra.qtd_modulos} placas` : '—'}</span>
                 </div>
                 <div>
                   <span className="text-zinc-400 block font-medium">Potência Unitária</span>
@@ -375,9 +363,45 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
           </Card>
         </section>
 
-        {/* BLOCO 3: Galeria de Fotos Offline-First com Abas */}
-        <section className="space-y-3">
-          <PhotoGallery obraId={obra.id_obra} />
+        {/* BLOCO 3: Fotos ou Materiais / Estoque com Abas Segmentadas */}
+        <section className="space-y-4">
+          <div role="tablist" aria-label="Abas da Obra" className="flex items-center gap-1.5 bg-zinc-950 p-1.5 rounded-2xl border border-zinc-800 text-xs font-bold w-full">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mainTab === 'fotos'}
+              onClick={() => setMainTab('fotos')}
+              className={`flex-1 min-h-[44px] px-3 py-2 rounded-xl transition-all flex items-center justify-center gap-2 ${
+                mainTab === 'fotos'
+                  ? 'bg-[#ffc61e] text-black shadow-md font-extrabold'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
+              }`}
+            >
+              <Camera className="w-4 h-4" />
+              <span>Fotos da Obra</span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mainTab === 'materiais'}
+              onClick={() => setMainTab('materiais')}
+              className={`flex-1 min-h-[44px] px-3 py-2 rounded-xl transition-all flex items-center justify-center gap-2 ${
+                mainTab === 'materiais'
+                  ? 'bg-[#ffc61e] text-black shadow-md font-extrabold'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
+              }`}
+            >
+              <Package className="w-4 h-4" />
+              <span>Materiais / Estoque</span>
+            </button>
+          </div>
+
+          {mainTab === 'fotos' ? (
+            <PhotoGallery obraId={obra.id_obra} />
+          ) : (
+            <ObraMateriaisTab idObra={obra.id_obra} />
+          )}
 
           {/* Observações Editáveis */}
           <Card className="p-4 sm:p-5 border-zinc-800 bg-zinc-900/90 space-y-3 shadow-md">
@@ -475,4 +499,3 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
     </div>
   );
 }
-

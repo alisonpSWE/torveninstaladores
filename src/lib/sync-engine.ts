@@ -10,6 +10,12 @@ import {
   createRehydratedFile,
   OfflinePhoto,
 } from '@/lib/offline-photo-store';
+import {
+  getAllOfflineMateriais,
+  getOfflineMateriaisByObra,
+  removeOfflineMaterial,
+  updateOfflineMaterialStatus,
+} from '@/lib/offline-materiais-store';
 
 export interface SyncEngineState {
   isSyncing: boolean;
@@ -59,7 +65,7 @@ class CentralSyncEngine {
       window.addEventListener('beforeunload', (e) => {
         if (this.isSyncing) {
           e.preventDefault();
-          e.returnValue = 'Há fotos sendo enviadas para a nuvem. Deseja realmente sair?';
+          e.returnValue = 'Há sincronizações em andamento com a nuvem. Deseja realmente sair?';
           return e.returnValue;
         }
       });
@@ -94,7 +100,7 @@ class CentralSyncEngine {
   }
 
   /**
-   * Executa a sincronização com retry progressivo e mutex atômico
+   * Executa a sincronização completa (Fotos + Materiais) com retry e mutex
    */
   public async syncAllPendingPhotos(options?: {
     obraId?: number;
@@ -121,34 +127,34 @@ class CentralSyncEngine {
 
     try {
       const targetObraId = options?.obraId;
+
+      // 1. Sincroniza Materiais Pendentes
+      await this.syncPendingMateriais(supabase, options?.queryClient, targetObraId);
+
+      // 2. Sincroniza Fotos Pendentes
       const photosToUpload: OfflinePhoto[] = targetObraId
         ? await getOfflinePhotosByObra(targetObraId)
         : await getAllOfflinePhotos();
 
-      if (!photosToUpload || photosToUpload.length === 0) {
-        this.isSyncing = false;
-        this.state = { ...this.state, isSyncing: false, pendingCount: 0 };
-        this.notify();
-        return { syncedCount: 0, failedCount: 0 };
-      }
+      if (photosToUpload && photosToUpload.length > 0) {
+        console.log(
+          `[SYNC ENGINE] 🚀 Iniciando upload de ${photosToUpload.length} foto(s) ` +
+          `${targetObraId ? `para a Obra #${targetObraId}` : 'de todas as obras'}...`
+        );
 
-      console.log(
-        `[SYNC ENGINE] 🚀 Iniciando upload de ${photosToUpload.length} foto(s) ` +
-        `${targetObraId ? `para a Obra #${targetObraId}` : 'de todas as obras'}...`
-      );
-
-      this.state.pendingCount = photosToUpload.length;
-      this.notify();
-
-      for (const photo of photosToUpload) {
-        this.state.currentPhotoName = photo.fileName;
+        this.state.pendingCount = photosToUpload.length;
         this.notify();
 
-        const success = await this.uploadSinglePhotoWithRetry(photo, supabase, 3);
-        if (success) {
-          syncedCount++;
-        } else {
-          failedCount++;
+        for (const photo of photosToUpload) {
+          this.state.currentPhotoName = photo.fileName;
+          this.notify();
+
+          const success = await this.uploadSinglePhotoWithRetry(photo, supabase, 3);
+          if (success) {
+            syncedCount++;
+          } else {
+            failedCount++;
+          }
         }
       }
 
@@ -157,6 +163,8 @@ class CentralSyncEngine {
         options.queryClient.invalidateQueries({ queryKey: ['obras'] });
         options.queryClient.invalidateQueries({ queryKey: ['obra-photos'] });
         options.queryClient.invalidateQueries({ queryKey: ['offline-photos'] });
+        options.queryClient.invalidateQueries({ queryKey: ['obra-materiais'] });
+        options.queryClient.invalidateQueries({ queryKey: ['estoque-produtos'] });
       }
 
       // Dispara evento customizado para reatividade global
@@ -179,6 +187,57 @@ class CentralSyncEngine {
     }
 
     return { syncedCount, failedCount };
+  }
+
+  /**
+   * Sincroniza materiais pendentes gravados no IndexedDB
+   */
+  private async syncPendingMateriais(supabase: any, queryClient: any, targetObraId?: number) {
+    try {
+      const materials = targetObraId
+        ? await getOfflineMateriaisByObra(targetObraId)
+        : await getAllOfflineMateriais();
+
+      if (!materials || materials.length === 0) return;
+
+      console.log(`[SYNC ENGINE] 📦 Sincronizando ${materials.length} lançamento(s) de materiais...`);
+
+      const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+
+      for (const mat of materials) {
+        try {
+          await updateOfflineMaterialStatus(mat.id, 'uploading');
+
+          const insertPayload: any = {
+            id_obra: mat.id_obra,
+            id_produto: mat.id_produto,
+            quantidade_utilizada: mat.quantidade_utilizada,
+            observacoes: mat.observacoes,
+            registrado_por: user?.id || null,
+          };
+
+          const { error } = await supabase
+            .from('obra_materiais')
+            .insert(insertPayload);
+
+          if (error) throw error;
+
+          await removeOfflineMaterial(mat.id);
+          console.log(`[SYNC ENGINE] ✅ Material "${mat.nome_produto}" (${mat.quantidade_utilizada} ${mat.unidade}) sincronizado!`);
+        } catch (err: any) {
+          console.error(`[SYNC ENGINE] ❌ Falha ao sincronizar material #${mat.id}:`, err?.message || err);
+          await updateOfflineMaterialStatus(mat.id, 'failed');
+        }
+      }
+
+      if (queryClient) {
+        queryClient.invalidateQueries({ queryKey: ['obra-materiais'] });
+        queryClient.invalidateQueries({ queryKey: ['estoque-produtos'] });
+        queryClient.invalidateQueries({ queryKey: ['offline-materiais'] });
+      }
+    } catch (err) {
+      console.error('[SYNC ENGINE] Erro no sincronizador de materiais:', err);
+    }
   }
 
   /**
@@ -282,7 +341,7 @@ class CentralSyncEngine {
 export const syncEngine = new CentralSyncEngine();
 
 /**
- * Hook Reativo para obter o resumo de fotos offline em toda a aplicação
+ * Hook Reativo para obter o resumo de dados offline (fotos + materiais) em toda a aplicação
  */
 export function usePendingPhotosSummary() {
   const [totalPending, setTotalPending] = useState<number>(0);
@@ -294,13 +353,24 @@ export function usePendingPhotosSummary() {
 
   const refreshSummary = useCallback(async () => {
     try {
-      const allPhotos = await getAllOfflinePhotos();
-      setTotalPending(allPhotos.length);
+      const [allPhotos, allMateriais] = await Promise.all([
+        getAllOfflinePhotos(),
+        getAllOfflineMateriais(),
+      ]);
+
+      const total = allPhotos.length + allMateriais.length;
+      setTotalPending(total);
+
       const byObra: Record<number, number> = {};
       for (const p of allPhotos) {
         const id = Number(p.id_obra || p.obraId || 0);
         if (id) byObra[id] = (byObra[id] || 0) + 1;
       }
+      for (const m of allMateriais) {
+        const id = Number(m.id_obra || 0);
+        if (id) byObra[id] = (byObra[id] || 0) + 1;
+      }
+
       setPendingByObra(byObra);
     } catch {
       // Ignora erro de leitura em SSR

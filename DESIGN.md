@@ -97,7 +97,8 @@ The color palette centers on high-contrast solar yellow and deep black, supporte
 - **Display** (Bold 700, `clamp(1.75rem, 5vw, 2.5rem)`, line-height 1.2): Title headers.
 - **Headline** (Semi-bold 600, `1.25rem` / 20px): Card titles.
 - **Body** (Regular 400, `1rem` / 16px): Task copy & field descriptions.
-- **Label** (Medium 500, `0.875rem` / 14px): Metadata & badges.
+- **Label** (Medium 500, `0.875rem` / 14px, `text-sm`): Form inputs & primary metadata.
+- **Caption / Micro** (Semi-bold 600, `0.75rem` / 12px, `text-xs`): Monospace SKU codes, table headers, status badges, timestamps, and compact data cells. All numeric metrics use `tabular-nums font-mono`.
 
 ## 4. Elevation
 

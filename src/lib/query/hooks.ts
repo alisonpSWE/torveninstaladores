@@ -588,71 +588,52 @@ export function useBulkUpdateCategoria() {
   });
 }
 
-export function useBatchUpsertEstoque() {
+export function useObraImpact(idObra: number | string | undefined, enabled = false) {
+  const numId = Number(idObra);
+  return useQuery({
+    queryKey: ['obra-impact', numId],
+    queryFn: async () => {
+      if (!numId) return null;
+      const res = await fetch(`/api/obras/${numId}/impact`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Erro ao calcular impacto da exclusão.');
+      }
+      return res.json() as Promise<{
+        id_obra: number;
+        cliente: string;
+        status: string;
+        cidade: string;
+        photoCount: number;
+        materialCount: number;
+        totalQuantidadeMateriais: number;
+      }>;
+    },
+    enabled: enabled && !isNaN(numId) && numId > 0,
+    staleTime: 0,
+  });
+}
+
+export function useDeleteObra() {
   const queryClient = useQueryClient();
-  const supabase = createClient();
 
   return useMutation({
-    mutationFn: async ({
-      items,
-      overwriteBalance,
-    }: {
-      items: Array<{
-        codigo: string;
-        nome: string;
-        categoria: string;
-        unidade: string;
-        quantidade_saldo: number;
-        estoque_minimo: number;
-        localizacao?: string;
-      }>;
-      overwriteBalance: boolean;
-    }) => {
-      if (!items || items.length === 0) return [];
-
-      let payload = items;
-
-      if (!overwriteBalance) {
-        // Busca saldo atual existente no banco para preservar
-        const { data: existing, error: fetchErr } = await (supabase.from('estoque_produtos') as any)
-          .select('codigo, quantidade_saldo');
-
-        if (!fetchErr && existing) {
-          const balanceMap = new Map<string, number>();
-          existing.forEach((p: any) => {
-            if (p.codigo) balanceMap.set(p.codigo.toUpperCase(), Number(p.quantidade_saldo));
-          });
-
-          payload = items.map((item) => {
-            const existingBalance = balanceMap.get(item.codigo.toUpperCase());
-            return {
-              ...item,
-              quantidade_saldo: existingBalance !== undefined ? existingBalance : item.quantidade_saldo,
-            };
-          });
-        }
+    mutationFn: async (idObra: number) => {
+      const res = await fetch(`/api/obras/${idObra}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Erro ao excluir obra.');
       }
-
-      // Upsert em lotes de 100
-      const chunkSize = 100;
-      const results = [];
-
-      for (let i = 0; i < payload.length; i += chunkSize) {
-        const chunk = payload.slice(i, i + chunkSize);
-        const { data, error } = await (supabase.from('estoque_produtos') as any)
-          .upsert(chunk, { onConflict: 'codigo' })
-          .select('*');
-
-        if (error) {
-          throw new Error(`Erro ao importar lote de produtos: ${error.message}`);
-        }
-        if (data) results.push(...data);
-      }
-
-      return results;
+      return res.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['obras'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-produtos'] });
+      queryClient.invalidateQueries({ queryKey: ['obra-materiais'] });
+      queryClient.invalidateQueries({ queryKey: ['obra-photos'] });
     },
   });
 }
+

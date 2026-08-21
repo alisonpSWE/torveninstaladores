@@ -5,6 +5,9 @@ import { Client } from '@upstash/qstash';
 const ALLOWED_STATUSES = [
   'Em Análise Técnica',
   'Documentação em Análise',
+  'Projeto Reprovado',
+  'PA e RO liberado',
+  'PA e RO Liberado',
   'Vistoria Solicitada',
 ];
 

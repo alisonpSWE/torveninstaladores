@@ -206,81 +206,83 @@ export function ObrasListPage() {
             </div>
           </div>
 
-          {/* Abas de Filtro com Contadores Reais em Tempo Real */}
-          <div
-            role="tablist"
-            aria-label="Filtro de status de obras"
-            className="grid grid-cols-3 gap-1 bg-zinc-950 p-1 rounded-2xl border border-zinc-800 text-xs font-bold w-full shadow-inner"
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'em_andamento'}
-              onClick={() => setActiveTab('em_andamento')}
-              className={`min-h-[44px] px-2 sm:px-3 py-2 rounded-xl transition-colors flex items-center justify-center gap-1.5 ${
-                activeTab === 'em_andamento'
-                  ? 'bg-[#ffc61e] text-black shadow-md font-extrabold'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
-              }`}
+          {/* Abas de Filtro com Contadores Reais em Tempo Real (Exclusivo para Administradores) */}
+          {isAdmin && (
+            <div
+              role="tablist"
+              aria-label="Filtro de status de obras"
+              className="grid grid-cols-3 gap-1 bg-zinc-950 p-1 rounded-2xl border border-zinc-800 text-xs font-bold w-full shadow-inner"
             >
-              <span className="truncate">Em Andamento</span>
-              <span
-                className={`font-mono tabular-nums text-xs px-1.5 py-0.5 rounded-md font-black shrink-0 ${
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'em_andamento'}
+                onClick={() => setActiveTab('em_andamento')}
+                className={`min-h-[44px] px-2 sm:px-3 py-2 rounded-xl transition-colors flex items-center justify-center gap-1.5 ${
                   activeTab === 'em_andamento'
-                    ? 'bg-black text-[#ffc61e]'
-                    : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
+                    ? 'bg-[#ffc61e] text-black shadow-md font-extrabold'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
                 }`}
               >
-                {emAndamentoObras.length}
-              </span>
-            </button>
+                <span className="truncate">Em Andamento</span>
+                <span
+                  className={`font-mono tabular-nums text-xs px-1.5 py-0.5 rounded-md font-black shrink-0 ${
+                    activeTab === 'em_andamento'
+                      ? 'bg-black text-[#ffc61e]'
+                      : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
+                  }`}
+                >
+                  {emAndamentoObras.length}
+                </span>
+              </button>
 
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'concluidas'}
-              onClick={() => setActiveTab('concluidas')}
-              className={`min-h-[44px] px-2 sm:px-3 py-2 rounded-xl transition-colors flex items-center justify-center gap-1.5 ${
-                activeTab === 'concluidas'
-                  ? 'bg-[#ffc61e] text-black shadow-md font-extrabold'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
-              }`}
-            >
-              <span className="truncate">Concluídas</span>
-              <span
-                className={`font-mono tabular-nums text-xs px-1.5 py-0.5 rounded-md font-black shrink-0 ${
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'concluidas'}
+                onClick={() => setActiveTab('concluidas')}
+                className={`min-h-[44px] px-2 sm:px-3 py-2 rounded-xl transition-colors flex items-center justify-center gap-1.5 ${
                   activeTab === 'concluidas'
-                    ? 'bg-black text-[#ffc61e]'
-                    : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
+                    ? 'bg-[#ffc61e] text-black shadow-md font-extrabold'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
                 }`}
               >
-                {concluidasObras.length}
-              </span>
-            </button>
+                <span className="truncate">Concluídas</span>
+                <span
+                  className={`font-mono tabular-nums text-xs px-1.5 py-0.5 rounded-md font-black shrink-0 ${
+                    activeTab === 'concluidas'
+                      ? 'bg-black text-[#ffc61e]'
+                      : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
+                  }`}
+                >
+                  {concluidasObras.length}
+                </span>
+              </button>
 
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'todas'}
-              onClick={() => setActiveTab('todas')}
-              className={`min-h-[44px] px-2 sm:px-3 py-2 rounded-xl transition-colors flex items-center justify-center gap-1.5 ${
-                activeTab === 'todas'
-                  ? 'bg-[#ffc61e] text-black shadow-md font-extrabold'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
-              }`}
-            >
-              <span className="truncate">Todas</span>
-              <span
-                className={`font-mono tabular-nums text-xs px-1.5 py-0.5 rounded-md font-black shrink-0 ${
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'todas'}
+                onClick={() => setActiveTab('todas')}
+                className={`min-h-[44px] px-2 sm:px-3 py-2 rounded-xl transition-colors flex items-center justify-center gap-1.5 ${
                   activeTab === 'todas'
-                    ? 'bg-black text-[#ffc61e]'
-                    : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
+                    ? 'bg-[#ffc61e] text-black shadow-md font-extrabold'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
                 }`}
               >
-                {totalObras.length}
-              </span>
-            </button>
-          </div>
+                <span className="truncate">Todas</span>
+                <span
+                  className={`font-mono tabular-nums text-xs px-1.5 py-0.5 rounded-md font-black shrink-0 ${
+                    activeTab === 'todas'
+                      ? 'bg-black text-[#ffc61e]'
+                      : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
+                  }`}
+                >
+                  {totalObras.length}
+                </span>
+              </button>
+            </div>
+          )}
 
           {/* Input de Busca com Foco em Alto Contraste */}
           <div className="relative">
@@ -375,11 +377,12 @@ export function ObrasListPage() {
               <div className="flex items-center justify-between text-xs text-zinc-400 px-1 font-medium">
                 <span>
                   {displayedObras.length} {displayedObras.length === 1 ? 'obra exibida' : 'obras exibidas'}
-                  {activeTab === 'em_andamento'
-                    ? ' (Em Andamento)'
-                    : activeTab === 'concluidas'
-                    ? ' (Concluídas / Vistoria)'
-                    : ' (Visão Completa)'}
+                  {isAdmin &&
+                    (activeTab === 'em_andamento'
+                      ? ' (Em Andamento)'
+                      : activeTab === 'concluidas'
+                      ? ' (Concluídas / Vistoria)'
+                      : ' (Visão Completa)')}
                 </span>
               </div>
               <div className="flex flex-col space-y-3.5">
@@ -401,20 +404,20 @@ export function ObrasListPage() {
                 <h3 className="text-base font-bold text-zinc-200">
                   {search
                     ? 'Nenhuma obra encontrada na busca'
-                    : activeTab === 'concluidas'
+                    : isAdmin && activeTab === 'concluidas'
                     ? 'Nenhuma obra concluída no momento'
-                    : activeTab === 'todas'
+                    : isAdmin && activeTab === 'todas'
                     ? 'Nenhuma obra cadastrada no sistema'
                     : 'Nenhuma obra em andamento no momento'}
                 </h3>
                 <p className="text-xs text-zinc-400 leading-relaxed">
                   {search
                     ? 'Tente buscar com outros termos de cliente, cidade ou ID.'
-                    : activeTab === 'concluidas'
+                    : isAdmin && activeTab === 'concluidas'
                     ? 'As obras finalizadas, com vistoria concluída ou homologadas aparecerão aqui.'
-                    : activeTab === 'todas'
+                    : isAdmin && activeTab === 'todas'
                     ? 'Você pode importar novas obras pelo botão "+" ou aguardar atualizações.'
-                    : 'Todas as obras ativas já foram concluídas ou aguardam novas ordens de serviço.'}
+                    : 'Todas as suas obras ativas já foram concluídas ou aguardam novas ordens de serviço.'}
                 </p>
               </div>
               {!search && isAdmin && (

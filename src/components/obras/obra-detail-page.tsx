@@ -2,12 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Obra } from '@/lib/supabase/types';
 import { PhotoGallery } from './photo-gallery';
 import { ObraMateriaisTab } from './obra-materiais-tab';
 import { ObraStatusBadge, getStatusBadgeVariant } from './obra-status-badge';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   ArrowLeft,
   PhoneCall,
@@ -27,9 +29,20 @@ import {
   MessageSquare,
   Camera,
   Package,
+  Trash2,
+  AlertTriangle,
+  AlertOctagon,
+  ShieldAlert,
 } from 'lucide-react';
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { useObra, useSyncObraWithGroner, useUpdateObraObservacoes } from '@/lib/query/hooks';
+import {
+  useObra,
+  useSyncObraWithGroner,
+  useUpdateObraObservacoes,
+  usePerfil,
+  useObraImpact,
+  useDeleteObra,
+} from '@/lib/query/hooks';
 
 interface ObraDetailPageProps {
   idObra?: string | number;
@@ -37,14 +50,26 @@ interface ObraDetailPageProps {
 }
 
 export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProps) {
+  const router = useRouter();
   const targetId = idObra || initialObra?.id_obra || 0;
   const { data: queriedObra, isLoading } = useObra(targetId);
+  const { data: perfil } = usePerfil();
+  const isAdmin = perfil?.role === 'admin';
 
   const obra = queriedObra || initialObra;
   const [mainTab, setMainTab] = useState<'fotos' | 'materiais'>('fotos');
   const [isEditingObs, setIsEditingObs] = useState(false);
   const [obsText, setObsText] = useState('');
   const [callConfirmDialogOpen, setCallConfirmDialogOpen] = useState(false);
+
+  // Estados do Modal de Exclusão Definitiva (Admin Only)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [confirmIdInput, setConfirmIdInput] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Hook de Impacto de Exclusão (Fotos e Materiais)
+  const { data: impact, isLoading: isLoadingImpact } = useObraImpact(obra?.id_obra, deleteModalOpen);
+  const deleteObraMutation = useDeleteObra();
 
   useEffect(() => {
     if (obra) {
@@ -92,6 +117,27 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
     }
   };
 
+  // Handler: Exclusão Segura da Obra pelo Admin
+  const handleDeleteObra = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!obra) return;
+    setDeleteError(null);
+
+    if (confirmIdInput.trim() !== String(obra.id_obra)) {
+      setDeleteError(`Digite exatamente o número ${obra.id_obra} para confirmar.`);
+      return;
+    }
+
+    try {
+      await deleteObraMutation.mutateAsync(obra.id_obra);
+      setDeleteModalOpen(false);
+      // Redireciona para a lista principal
+      router.push('/');
+    } catch (err: any) {
+      setDeleteError(err.message || 'Erro ao excluir obra.');
+    }
+  };
+
   if (isLoading || !obra) {
     return (
       <div className="flex flex-col min-h-screen bg-black text-zinc-100 items-center justify-center p-6 space-y-4">
@@ -136,8 +182,29 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
               aria-label="Sincronizar manualmente com Groner CRM"
             >
               <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${syncWithGronerMutation.isPending ? 'animate-spin text-[#ffc61e]' : ''}`} />
-              {syncWithGronerMutation.isPending ? 'Sincronizando...' : 'Sincronizar CRM'}
+              <span className="hidden sm:inline">
+                {syncWithGronerMutation.isPending ? 'Sincronizando...' : 'Sincronizar CRM'}
+              </span>
+              <span className="sm:hidden">CRM</span>
             </Button>
+
+            {/* BOTÃO DE EXCLUIR OBRA: Apenas para Administradores */}
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setConfirmIdInput('');
+                  setDeleteError(null);
+                  setDeleteModalOpen(true);
+                }}
+                className="h-10 text-xs border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 px-3 font-bold transition-all min-h-[44px] flex items-center gap-1.5"
+                title="Excluir Obra Permanentemente (Admin)"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span className="hidden sm:inline">Excluir Obra</span>
+              </Button>
+            )}
 
             <span className="font-mono text-xs text-[#ffc61e] bg-[#ffc61e]/15 px-2.5 py-1.5 rounded-xl border border-[#ffc61e]/30 font-bold">
               #{obra.id_obra}
@@ -178,167 +245,140 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
             </div>
           </div>
 
-          {obra.instalador && (
-            <div className="flex items-center gap-1.5 text-xs text-zinc-300 pt-2 border-t border-zinc-800/60">
-              <UserCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>Técnico Responsável: <strong className="text-white font-bold">{obra.instalador}</strong></span>
+          {/* Localização com Botão Maps */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-zinc-800/80">
+            <div className="space-y-0.5">
+              <span className="text-xs text-zinc-400 flex items-center gap-1.5 font-medium">
+                <MapPin className="w-3.5 h-3.5 text-[#ffc61e] shrink-0" />
+                <span>{obra.endereco}</span>
+              </span>
+              <span className="text-xs text-zinc-500 font-medium pl-5 block">
+                {obra.cidade}
+              </span>
             </div>
-          )}
+
+            {obra.link_maps && obra.link_maps !== 'Coordenadas ausentes' && (
+              <a
+                href={obra.link_maps}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-1.5 text-xs text-zinc-200 bg-zinc-800 hover:bg-zinc-700 px-3.5 py-2 rounded-xl transition-colors shrink-0 font-bold border border-zinc-700/60 min-h-[44px]"
+              >
+                <span>Ver no Maps</span>
+                <ExternalLink className="w-3.5 h-3.5 text-[#ffc61e]" />
+              </a>
+            )}
+          </div>
+
+          {/* Contato do Cliente: Telefone + WhatsApp */}
+          <div className="pt-2 border-t border-zinc-800/80 space-y-2">
+            <span className="text-xs font-extrabold uppercase tracking-wider text-zinc-300">
+              Contato do Cliente
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              {obra.telefone && obra.telefone !== 'Sem telefone' ? (
+                <>
+                  <Button
+                    type="button"
+                    onClick={() => setCallConfirmDialogOpen(true)}
+                    className="flex-1 min-w-[140px] bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs h-11 rounded-xl shadow-sm flex items-center justify-center gap-2 min-h-[44px]"
+                  >
+                    <PhoneCall className="w-4 h-4" />
+                    <span>Ligar ({obra.telefone})</span>
+                  </Button>
+
+                  {getWhatsAppUrl(obra.telefone) && (
+                    <a
+                      href={getWhatsAppUrl(obra.telefone)!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 min-w-[140px] bg-emerald-950 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 font-extrabold text-xs h-11 rounded-xl shadow-sm flex items-center justify-center gap-2 min-h-[44px] transition-colors"
+                    >
+                      <MessageSquare className="w-4 h-4 text-emerald-400" />
+                      <span>WhatsApp</span>
+                    </a>
+                  )}
+                </>
+              ) : (
+                <span className="text-xs text-zinc-500 italic">Telefone não cadastrado no CRM.</span>
+              )}
+            </div>
+          </div>
+
+          {/* Vendedor Responsável no CRM */}
+          <div className="flex items-center justify-between pt-2 border-t border-zinc-800/80 text-xs">
+            <span className="text-zinc-400 font-semibold flex items-center gap-1.5">
+              <UserCheck className="w-3.5 h-3.5 text-[#ffc61e]" /> Vendedor:
+            </span>
+            <span className="font-bold text-zinc-100 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
+              {obra.instalador || 'Não informado'}
+            </span>
+          </div>
         </div>
 
-        {/* BLOCO 1: Contato e Logística */}
+        {/* BLOCO 2: Especificações de Engenharia */}
         <section className="space-y-2.5">
           <h2 className="text-sm font-extrabold text-white flex items-center gap-2 px-0.5">
-            <PhoneCall className="w-4 h-4 text-[#ffc61e]" /> Contato e Logística
+            <Zap className="w-4 h-4 text-[#ffc61e]" /> Especificações de Engenharia
           </h2>
 
-          {obra.telefone && obra.telefone !== 'Sem telefone' ? (
-            <Card className="p-4 bg-zinc-900/90 border-zinc-800 space-y-3 shadow-md">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-                    <PhoneCall className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="text-xs text-zinc-400 font-semibold uppercase tracking-wider block">Telefone do Cliente</span>
-                    <p className="text-base font-bold text-white font-mono">
-                      {obra.telefone}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Botões de Ação com Touch Target ≥48px */}
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setCallConfirmDialogOpen(true)}
-                  className="w-full min-h-[48px] h-12 border-zinc-700 bg-zinc-800/80 text-zinc-100 hover:bg-zinc-800 hover:text-white font-bold text-xs flex items-center justify-center gap-2"
-                >
-                  <PhoneCall className="w-4 h-4 text-emerald-400" /> Ligar
-                </Button>
-
-                {getWhatsAppUrl(obra.telefone) && (
-                  <a
-                    href={getWhatsAppUrl(obra.telefone)!}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full min-h-[48px] h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-sm"
-                  >
-                    <MessageSquare className="w-4 h-4 fill-white/20" /> WhatsApp
-                  </a>
-                )}
-              </div>
-            </Card>
-          ) : (
-            <Card className="p-4 bg-zinc-900/50 border-zinc-800 text-zinc-400 text-xs flex items-center justify-between">
-              <span>Telefone não cadastrado para esta obra.</span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handlePanicSync}
-                disabled={syncWithGronerMutation.isPending}
-                className="h-9 text-xs border-[#ffc61e]/40 text-[#ffc61e] min-h-[44px]"
-              >
-                Buscar CRM
-              </Button>
-            </Card>
-          )}
-
-          {obra.link_maps && obra.link_maps !== 'Coordenadas ausentes' ? (
-            <a href={obra.link_maps} target="_blank" rel="noopener noreferrer" className="block w-full">
-              <Card className="p-4 bg-zinc-900/90 border-zinc-800 hover:border-[#ffc61e]/70 hover:bg-zinc-900 active:scale-[0.99] transition-all duration-150 group shadow-md">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#ffc61e]/15 border border-[#ffc61e]/30 flex items-center justify-center text-[#ffc61e] shrink-0 mt-0.5">
-                    <MapPin className="w-5 h-5" />
-                  </div>
-                  <div className="space-y-1 flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-[#ffc61e] uppercase tracking-wider">{obra.cidade}</span>
-                      <span className="text-xs text-zinc-400 flex items-center gap-1 group-hover:text-[#ffc61e] transition-colors font-semibold">
-                        Navegar GPS <ExternalLink className="w-3.5 h-3.5" />
-                      </span>
-                    </div>
-                    <p className="text-xs text-zinc-200 leading-snug font-medium">
-                      {obra.endereco ? `${obra.endereco}, ${obra.cidade}` : obra.cidade}
-                    </p>
-                  </div>
-                </div>
-              </Card>
-            </a>
-          ) : (
-            <Card className="p-4 bg-zinc-900/50 border-zinc-800 text-zinc-400 text-xs flex items-center justify-between">
-              <span>Coordenadas GPS não cadastradas.</span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handlePanicSync}
-                disabled={syncWithGronerMutation.isPending}
-                className="h-9 text-xs border-[#ffc61e]/40 text-[#ffc61e] min-h-[44px]"
-              >
-                Buscar CRM
-              </Button>
-            </Card>
-          )}
-        </section>
-
-        {/* BLOCO 2: Dados Técnicos da Instalação */}
-        <section className="space-y-2.5">
-          <h2 className="text-sm font-extrabold text-white flex items-center gap-2 px-0.5">
-            <Zap className="w-4 h-4 text-[#ffc61e]" /> Especificações Técnicas
-          </h2>
-
-          <Card className="p-4 bg-zinc-900/90 border-zinc-800 space-y-4 shadow-md">
-            {/* Potência Total & Tipo de Ligação */}
+          <Card className="p-4 sm:p-5 border-zinc-800 bg-zinc-900/90 space-y-4 shadow-md">
+            {/* Potência Total & Rede / Ligação */}
             <div className="grid grid-cols-2 gap-3 pb-3 border-b border-zinc-800">
-              <div className="space-y-0.5">
-                <span className="text-xs text-zinc-400 font-semibold uppercase tracking-wider">Potência do Sistema</span>
-                <p className="text-lg font-black text-[#ffc61e] font-mono">
-                  {obra.potencia_total_kwp ? `${obra.potencia_total_kwp} kWp` : 'Sem dados'}
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-bold uppercase tracking-wider">
+                  <Zap className="w-3.5 h-3.5 text-[#ffc61e]" /> Potência Total
+                </div>
+                <p className="text-2xl sm:text-3xl font-extrabold text-[#ffc61e] font-mono">
+                  {obra.potencia_total_kwp ? obra.potencia_total_kwp.toFixed(2) : '0'} <span className="text-xs font-bold text-zinc-400">kWp</span>
                 </p>
               </div>
 
-              <div className="space-y-0.5">
-                <span className="text-xs text-zinc-400 font-semibold uppercase tracking-wider">Tipo de Ligação</span>
-                <p className="text-sm font-bold text-white">
-                  {obra.tipo_ligacao || 'Não informado'}
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-bold uppercase tracking-wider">
+                  <Layers className="w-3.5 h-3.5 text-zinc-400" /> Rede / Ligação
+                </div>
+                <p className="text-base font-bold text-white pt-1">
+                  {obra.tipo_ligacao || 'Não definida'}
                 </p>
               </div>
             </div>
 
-            {/* Inversor */}
-            <div className="space-y-2 bg-zinc-950/80 p-3.5 rounded-xl border border-zinc-800/80">
-              <div className="flex items-center gap-2 text-xs font-bold text-white">
-                <Cpu className="w-4 h-4 text-[#ffc61e]" />
-                <span>Inversor Solar</span>
+            {/* Inversor Solar */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-300 uppercase tracking-wider">
+                <Cpu className="w-4 h-4 text-[#ffc61e]" /> Inversor Solar
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="grid grid-cols-2 gap-2.5 text-xs bg-zinc-950/80 p-3.5 rounded-xl border border-zinc-800/90">
                 <div>
                   <span className="text-zinc-400 block font-medium">Marca</span>
                   <span className="font-semibold text-zinc-200">{obra.inversor_marca || '—'}</span>
                 </div>
                 <div>
-                  <span className="text-zinc-400 block font-medium">Potência</span>
+                  <span className="text-zinc-400 block font-medium">Potência Inversor</span>
                   <span className="font-semibold text-zinc-200">{obra.potencia_inversor_kw ? `${obra.potencia_inversor_kw} kW` : '—'}</span>
                 </div>
                 <div className="col-span-2 pt-2 border-t border-zinc-800/60">
                   <span className="text-zinc-400 block font-medium">Modelo</span>
-                  <span className="font-semibold text-zinc-200 break-words">{obra.inversor_modelo || '—'}</span>
+                  <span className="font-semibold text-zinc-200 break-words font-mono">{obra.inversor_modelo || '—'}</span>
                 </div>
               </div>
             </div>
 
             {/* Módulos Fotovoltaicos */}
-            <div className="space-y-2 bg-zinc-950/80 p-3.5 rounded-xl border border-zinc-800/80">
-              <div className="flex items-center gap-2 text-xs font-bold text-white">
-                <Layers className="w-4 h-4 text-[#ffc61e]" />
-                <span>Módulos Fotovoltaicos</span>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold text-zinc-300 uppercase tracking-wider">
+                <div className="flex items-center gap-1.5">
+                  <Zap className="w-4 h-4 text-[#ffc61e]" /> Módulos Fotovoltaicos
+                </div>
+                <span className="text-[#ffc61e] font-mono font-bold bg-[#ffc61e]/15 px-2.5 py-0.5 rounded-md border border-[#ffc61e]/30">
+                  {obra.qtd_modulos} placas
+                </span>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="grid grid-cols-2 gap-2.5 text-xs bg-zinc-950/80 p-3.5 rounded-xl border border-zinc-800/90">
                 <div>
-                  <span className="text-zinc-400 block font-medium">Quantidade</span>
-                  <span className="font-semibold text-zinc-200">{obra.qtd_modulos ? `${obra.qtd_modulos} placas` : '—'}</span>
+                  <span className="text-zinc-400 block font-medium">Marca Placa</span>
+                  <span className="font-semibold text-zinc-200">{obra.modulos_marca || '—'}</span>
                 </div>
                 <div>
                   <span className="text-zinc-400 block font-medium">Potência Unitária</span>
@@ -346,7 +386,7 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
                 </div>
                 <div className="col-span-2 pt-2 border-t border-zinc-800/60">
                   <span className="text-zinc-400 block font-medium">Modelo Placa</span>
-                  <span className="font-semibold text-zinc-200 break-words">{obra.modulos_modelo || '—'}</span>
+                  <span className="font-semibold text-zinc-200 break-words font-mono">{obra.modulos_modelo || '—'}</span>
                 </div>
               </div>
             </div>
@@ -369,17 +409,21 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
           </Card>
         </section>
 
-        {/* BLOCO 3: Fotos ou Materiais / Estoque com Abas Segmentadas */}
-        <section className="space-y-4">
-          <div role="tablist" aria-label="Abas da Obra" className="flex items-center gap-1.5 bg-zinc-950 p-1.5 rounded-2xl border border-zinc-800 text-xs font-bold w-full">
+        {/* NAVEGAÇÃO ENTRE ABAS: [📸 Fotos da Obra] vs [📦 Materiais / Estoque] */}
+        <section className="space-y-4" aria-label="Seções operacionais da obra">
+          <div
+            role="tablist"
+            aria-label="Alternar entre fotos e materiais consumidos"
+            className="flex items-center gap-1.5 bg-zinc-950 p-1.5 rounded-2xl border border-zinc-800 text-xs font-bold shadow-inner"
+          >
             <button
               type="button"
               role="tab"
               aria-selected={mainTab === 'fotos'}
               onClick={() => setMainTab('fotos')}
-              className={`flex-1 min-h-[44px] px-3 py-2 rounded-xl transition-all flex items-center justify-center gap-2 ${
+              className={`flex-1 min-h-[44px] py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
                 mainTab === 'fotos'
-                  ? 'bg-[#ffc61e] text-black shadow-md font-extrabold'
+                  ? 'bg-[#ffc61e] text-black shadow-md font-extrabold scale-[1.01]'
                   : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
               }`}
             >
@@ -392,9 +436,9 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
               role="tab"
               aria-selected={mainTab === 'materiais'}
               onClick={() => setMainTab('materiais')}
-              className={`flex-1 min-h-[44px] px-3 py-2 rounded-xl transition-all flex items-center justify-center gap-2 ${
+              className={`flex-1 min-h-[44px] py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
                 mainTab === 'materiais'
-                  ? 'bg-[#ffc61e] text-black shadow-md font-extrabold'
+                  ? 'bg-[#ffc61e] text-black shadow-md font-extrabold scale-[1.01]'
                   : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
               }`}
             >
@@ -519,6 +563,124 @@ export function ObraDetailPage({ idObra, obra: initialObra }: ObraDetailPageProp
           )}
         </div>
       </Dialog>
+
+      {/* Modal de Exclusão Definitiva da Obra (Admin Only) */}
+      {isAdmin && (
+        <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+          <DialogHeader>
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-1 shadow-sm">
+              <ShieldAlert className="w-6 h-6" />
+            </div>
+            <DialogTitle className="text-white text-base sm:text-lg font-bold flex items-center gap-2">
+              <span>Excluir Obra #{obra.id_obra} Permanentemente</span>
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400 text-xs pt-1 leading-relaxed">
+              Esta ação removerá todos os dados desta obra do aplicativo e do banco de dados na nuvem.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleDeleteObra} className="space-y-4 mt-2">
+            {deleteError && (
+              <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-bold flex items-center gap-2">
+                <AlertOctagon className="w-4 h-4 shrink-0" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            {/* Painel de Impacto */}
+            <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2.5 text-xs text-zinc-300">
+              <span className="font-bold text-white uppercase tracking-wider text-xs block">
+                Impacto da Exclusão:
+              </span>
+
+              {isLoadingImpact ? (
+                <div className="flex items-center gap-2 text-zinc-400 py-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-[#ffc61e]" />
+                  <span>Calculando registros vinculados...</span>
+                </div>
+              ) : (
+                <ul className="space-y-1.5 text-zinc-300 text-xs">
+                  <li className="flex items-center gap-2">
+                    <Camera className="w-4 h-4 text-[#ffc61e] shrink-0" />
+                    <span>
+                      <strong className="text-white">{impact?.photoCount || 0} foto(s)</strong> serão apagadas permanentemente do armazenamento.
+                    </span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Package className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>
+                      <strong className="text-white">{impact?.materialCount || 0} registro(s)</strong> de consumo de materiais serão removidos.
+                    </span>
+                  </li>
+                </ul>
+              )}
+
+              {/* Alerta de Retorno ao Estoque */}
+              {(impact?.totalQuantidadeMateriais || 0) > 0 && (
+                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold leading-relaxed mt-2 flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <span>
+                    ⚠️ Os <strong className="text-white">{impact?.totalQuantidadeMateriais} materiais</strong> registrados nesta obra retornarão automaticamente ao saldo do estoque central.
+                  </span>
+                </div>
+              )}
+
+              {/* Informação sobre Reimportação */}
+              <div className="p-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-400 leading-relaxed mt-1">
+                💡 <strong>Dica:</strong> Se você quiser trazer esta obra de volta no futuro, basta importá-la novamente digitando o ID <strong className="text-[#ffc61e]">#{obra.id_obra}</strong> na tela inicial.
+              </div>
+            </div>
+
+            {/* Input de Confirmação por ID */}
+            <div className="space-y-1.5">
+              <label htmlFor="confirm-obra-id" className="text-xs font-bold text-zinc-200 block">
+                Para confirmar a exclusão, digite o ID da obra (<span className="text-[#ffc61e] font-mono">{obra.id_obra}</span>):
+              </label>
+              <Input
+                id="confirm-obra-id"
+                type="text"
+                value={confirmIdInput}
+                onChange={(e) => setConfirmIdInput(e.target.value)}
+                placeholder={`Digite ${obra.id_obra}`}
+                disabled={deleteObraMutation.isPending}
+                className="bg-zinc-950 border-zinc-700 text-white font-mono text-sm focus:ring-2 focus:ring-rose-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-zinc-800">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setDeleteModalOpen(false)}
+                disabled={deleteObraMutation.isPending}
+                className="min-h-[44px]"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  confirmIdInput.trim() !== String(obra.id_obra) ||
+                  deleteObraMutation.isPending
+                }
+                className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs min-h-[44px] px-5 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shadow-md"
+              >
+                {deleteObraMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Excluindo...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Excluir Obra Definitivamente</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+      )}
     </div>
   );
 }

@@ -28,7 +28,6 @@ import {
   TrendingDown,
   Shield,
   Loader2,
-  FileSpreadsheet,
   Download,
   Table as TableIcon,
   LayoutGrid,
@@ -48,10 +47,6 @@ const KardexModal = dynamic(
   () => import('./kardex-modal').then((mod) => mod.KardexModal),
   { ssr: false }
 );
-const ImportCsvModal = dynamic(
-  () => import('./import-csv-modal').then((mod) => mod.ImportCsvModal),
-  { ssr: false }
-);
 const CriticalPurchaseModal = dynamic(
   () => import('./critical-purchase-modal').then((mod) => mod.CriticalPurchaseModal),
   { ssr: false }
@@ -67,7 +62,6 @@ export function EstoqueAdminDashboard() {
   // Modais
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
-  const [csvModalOpen, setCsvModalOpen] = useState(false);
   const [bulkCategoryOpen, setBulkCategoryOpen] = useState(false);
   const [criticalPurchaseOpen, setCriticalPurchaseOpen] = useState(false);
   const [kardexProduct, setKardexProduct] = useState<EstoqueProduto | null>(null);
@@ -419,17 +413,6 @@ export function EstoqueAdminDashboard() {
             >
               <Download className="w-4 h-4 text-[#ffc61e]" />
               <span>Exportar CSV</span>
-            </Button>
-
-            {/* Importar CSV */}
-            <Button
-              variant="outline"
-              onClick={() => setCsvModalOpen(true)}
-              className="h-10 border-zinc-700 bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 hover:text-white font-bold text-xs rounded-xl min-h-[44px] px-3.5 flex items-center gap-1.5"
-            >
-              <FileSpreadsheet className="w-4 h-4 text-[#ffc61e]" />
-              <span className="hidden sm:inline">Importar CSV</span>
-              <span className="sm:hidden">CSV</span>
             </Button>
 
             {/* Cadastrar Produto (Ação Primária Amarela) */}
@@ -913,16 +896,6 @@ export function EstoqueAdminDashboard() {
           </div>
         </form>
       </Dialog>
-
-      {/* Modal: Importação de Catálogo via Planilha CSV */}
-      <ImportCsvModal
-        open={csvModalOpen}
-        onOpenChange={setCsvModalOpen}
-        onSuccess={() => {
-          refetch();
-          showToast('Importação de CSV concluída com sucesso!');
-        }}
-      />
 
       {/* Toast Flutuante Não-Bloqueante com Suporte a Desfazer (Undo) */}
       {toastInfo && (

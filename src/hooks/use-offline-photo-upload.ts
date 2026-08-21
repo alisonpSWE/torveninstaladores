@@ -99,21 +99,37 @@ export function useOfflinePhotoUpload(obraId: number) {
   }, [pendingPhotos]);
 
   /**
-   * Captura, Comprime via Canvas Nativo e Salva como ArrayBuffer no IndexedDB
+   * Captura em Lote, Comprime via Canvas Nativo e Salva como ArrayBuffer no IndexedDB
    */
-  const capturePhoto = useCallback(
-    async (file: File): Promise<OfflinePhoto | null> => {
-      if (!file || !obraId) return null;
+  const capturePhotos = useCallback(
+    async (files: File | File[] | FileList): Promise<OfflinePhoto[]> => {
+      if (!files || !obraId) return [];
 
-      try {
-        console.log(`[USE OFFLINE PHOTO] 📸 Ingestão e compressão da foto para Obra #${obraId}...`);
-        const compressed = await compressImageNative(file, file.name);
-        const offlineRecord = await savePhotoOffline(
-          Number(obraId),
-          compressed.buffer,
-          compressed.fileName
-        );
+      const list: File[] = Array.isArray(files)
+        ? files
+        : files instanceof FileList
+        ? Array.from(files)
+        : [files];
 
+      const results: OfflinePhoto[] = [];
+
+      for (const file of list) {
+        if (!file) continue;
+        try {
+          console.log(`[USE OFFLINE PHOTO] 📸 Ingestão e compressão da foto "${file.name}" para Obra #${obraId}...`);
+          const compressed = await compressImageNative(file, file.name);
+          const offlineRecord = await savePhotoOffline(
+            Number(obraId),
+            compressed.buffer,
+            compressed.fileName
+          );
+          results.push(offlineRecord);
+        } catch (err: any) {
+          console.error('[USE OFFLINE PHOTO] 💥 Erro ao capturar foto:', err);
+        }
+      }
+
+      if (results.length > 0) {
         queryClient.invalidateQueries({ queryKey: ['offline-photos', Number(obraId)] });
         refetchPending();
 
@@ -121,14 +137,22 @@ export function useOfflinePhotoUpload(obraId: number) {
         if (typeof navigator !== 'undefined' && navigator.onLine) {
           syncEngine.scheduleStabilizedSync(500);
         }
-
-        return offlineRecord;
-      } catch (err: any) {
-        console.error('[USE OFFLINE PHOTO] Erro ao capturar foto:', err);
-        return null;
       }
+
+      return results;
     },
     [obraId, queryClient, refetchPending]
+  );
+
+  /**
+   * Captura de foto individual (retrocompatível)
+   */
+  const capturePhoto = useCallback(
+    async (file: File): Promise<OfflinePhoto | null> => {
+      const results = await capturePhotos(file);
+      return results[0] || null;
+    },
+    [capturePhotos]
   );
 
   /**
@@ -151,6 +175,7 @@ export function useOfflinePhotoUpload(obraId: number) {
 
   return {
     capturePhoto,
+    capturePhotos,
     syncOfflinePhotos,
     processQueueInForeground: syncOfflinePhotos,
     pendingCount: pendingPhotos.length,

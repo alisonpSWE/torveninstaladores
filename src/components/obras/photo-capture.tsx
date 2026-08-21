@@ -1,6 +1,6 @@
 'use client';
 
-import React, { ChangeEvent } from 'react';
+import React, { useState, ChangeEvent } from 'react';
 import { useOfflinePhotoUpload } from '@/hooks/use-offline-photo-upload';
 import { Camera, Upload, ImageIcon, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,8 +11,9 @@ interface PhotoCaptureProps {
 }
 
 export function PhotoCapture({ obraId }: PhotoCaptureProps) {
+  const [isCapturing, setIsCapturing] = useState(false);
   const {
-    capturePhoto,
+    capturePhotos,
     pendingCount,
     isOnline,
     isSyncing,
@@ -21,10 +22,15 @@ export function PhotoCapture({ obraId }: PhotoCaptureProps) {
   } = useOfflinePhotoUpload(obraId);
 
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await capturePhoto(file);
-    e.target.value = ''; // reseta input
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setIsCapturing(true);
+    try {
+      await capturePhotos(files);
+    } finally {
+      setIsCapturing(false);
+      e.target.value = '';
+    }
   };
 
   return (
@@ -66,22 +72,50 @@ export function PhotoCapture({ obraId }: PhotoCaptureProps) {
         </div>
       )}
 
-      {/* Botão para Acionar Câmera Nativa em Alto Contraste 14:1 */}
-      <label htmlFor="camera-file-input" className="block w-full cursor-pointer">
-        <div className="w-full h-12 sm:h-14 rounded-xl bg-[#ffc61e] hover:bg-[#e5b010] text-black font-extrabold text-sm sm:text-base flex items-center justify-center gap-2 shadow-md border border-[#ffc61e]/40 active:scale-[0.99] transition-all">
-          <Camera className="w-5 h-5 stroke-[2.5]" />
-          <span>Tirar Foto com a Câmera</span>
-        </div>
-        <input
-          id="camera-file-input"
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={handleFileChange}
-          className="hidden"
-          aria-label="Tirar ou selecionar foto"
-        />
-      </label>
+      {/* Botões para Acionar Câmera Nativa e Galeria de Fotos */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <label htmlFor="capture-camera-input" className="block w-full cursor-pointer">
+          <div className="w-full h-12 rounded-xl bg-[#ffc61e] hover:bg-[#e5b010] text-black font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md border border-[#ffc61e]/40 active:scale-[0.99] transition-all">
+            {isCapturing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Camera className="w-4 h-4 stroke-[2.5]" />
+            )}
+            <span>{isCapturing ? 'Processando...' : 'Tirar Foto com a Câmera'}</span>
+          </div>
+          <input
+            id="capture-camera-input"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            disabled={isCapturing}
+            onChange={handleFileChange}
+            className="hidden"
+            aria-label="Tirar foto com a câmera"
+          />
+        </label>
+
+        <label htmlFor="capture-gallery-input" className="block w-full cursor-pointer">
+          <div className="w-full h-12 rounded-xl bg-zinc-950 hover:bg-zinc-850 text-zinc-200 hover:text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md border border-zinc-700 active:scale-[0.99] transition-all">
+            {isCapturing ? (
+              <Loader2 className="w-4 h-4 animate-spin text-[#ffc61e]" />
+            ) : (
+              <ImageIcon className="w-4 h-4 text-[#ffc61e]" />
+            )}
+            <span>{isCapturing ? 'Processando...' : 'Escolher da Galeria'}</span>
+          </div>
+          <input
+            id="capture-gallery-input"
+            type="file"
+            accept="image/*"
+            multiple
+            disabled={isCapturing}
+            onChange={handleFileChange}
+            className="hidden"
+            aria-label="Escolher fotos da galeria"
+          />
+        </label>
+      </div>
 
       {/* Indicador de fotos pendentes de envio com botão de Sync */}
       {pendingCount > 0 && (

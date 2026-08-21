@@ -1,9 +1,10 @@
 /**
  * Compressor Nativo via Canvas 2D Otimizado para iOS WebKit e Android
  * - 100% Offline (zero dependência de scripts externos ou WebWorkers)
- * - Ingestão imediata de ArrayBuffer para cortar o ponteiro temporário do iOS
+ * - Ingestão imediata de ArrayBuffer para cortar o ponteiro temporário do iOS WebKit
+ * - Suporte nativo a fotos HEIC/HEIF de iPhones convertendo para JPEG padrão
+ * - Limpeza agressiva de memória GPU/RAM no Canvas
  * - Redimensionamento proporcional (Max 1920px Full HD)
- * - Conversão universal para JPEG de alta performance
  */
 
 export interface CompressedImageResult {
@@ -37,7 +38,13 @@ export async function compressImageNative(
     throw new Error('Buffer de imagem vazio.');
   }
 
-  const cleanFileName = (fileName || `foto_${Date.now()}.jpg`).replace(/[^a-zA-Z0-9._-]/g, '_');
+  // Normalização de extensão: converte .heic, .heif, .png para .jpg
+  let baseName = fileName || `foto_${Date.now()}.jpg`;
+  if (!/\.(jpg|jpeg)$/i.test(baseName)) {
+    baseName = baseName.replace(/\.[a-zA-Z0-9]+$/, '') + '.jpg';
+  }
+  const cleanFileName = baseName.replace(/[^a-zA-Z0-9._-]/g, '_');
+
   const initialBlob = new Blob([rawBuffer], { type: mimeType });
 
   // 2. RENDERIZAÇÃO VIA CANVAS 2D NATIVO (100% Offline e compatível com iOS Safari)
@@ -80,25 +87,33 @@ export async function compressImageNative(
       canvas.toBlob(
         async (compressedBlob) => {
           if (compressedBlob && compressedBlob.size > 0) {
-            const compressedBuffer = await compressedBlob.arrayBuffer();
-            const compressedFile = new File([compressedBuffer], cleanFileName, {
-              type: 'image/jpeg',
-              lastModified: Date.now(),
-            });
+            try {
+              const compressedBuffer = await compressedBlob.arrayBuffer();
+              const compressedFile = new File([compressedBuffer], cleanFileName, {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+              });
 
-            console.log(
-              `[IMAGE COMPRESSOR NATIVE] ✅ Compressão concluída: ` +
-              `${(rawBuffer.byteLength / 1024).toFixed(1)}KB ➔ ${(compressedFile.size / 1024).toFixed(1)}KB ` +
-              `(${width}x${height}px)`
-            );
+              // Desalocação explícita de memória do Canvas (previne crash no iOS Safari)
+              canvas.width = 0;
+              canvas.height = 0;
 
-            resolve({
-              file: compressedFile,
-              buffer: compressedBuffer,
-              blob: compressedBlob,
-              fileName: cleanFileName,
-              sizeBytes: compressedFile.size,
-            });
+              console.log(
+                `[IMAGE COMPRESSOR NATIVE] ✅ Compressão concluída: ` +
+                `${(rawBuffer.byteLength / 1024).toFixed(1)}KB ➔ ${(compressedFile.size / 1024).toFixed(1)}KB ` +
+                `(${width}x${height}px)`
+              );
+
+              resolve({
+                file: compressedFile,
+                buffer: compressedBuffer,
+                blob: compressedBlob,
+                fileName: cleanFileName,
+                sizeBytes: compressedFile.size,
+              });
+            } catch {
+              fallbackResolve();
+            }
           } else {
             fallbackResolve();
           }

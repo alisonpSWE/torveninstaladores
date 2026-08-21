@@ -84,7 +84,11 @@ export function ProjectPhotoDropzone({
             stage: 'uploading',
           });
 
-          const cleanFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          let baseName = file.name;
+          if (!/\.(jpg|jpeg)$/i.test(baseName)) {
+            baseName = baseName.replace(/\.[a-zA-Z0-9]+$/, '') + '.jpg';
+          }
+          const cleanFileName = baseName.replace(/[^a-zA-Z0-9._-]/g, '_');
           const storagePath = `obra_${obraId}/projeto/${Date.now()}_${index}_${cleanFileName}`;
 
           const { error: uploadError } = await supabase.storage
@@ -119,7 +123,7 @@ export function ProjectPhotoDropzone({
             id_obra: Number(obraId),
             storage_path: storagePath,
             public_url: publicUrl,
-            file_name: file.name,
+            file_name: baseName,
             content_type: compressedFile.type || 'image/jpeg',
             size_bytes: compressedFile.size,
             category: 'projeto',

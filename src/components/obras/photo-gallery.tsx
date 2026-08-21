@@ -56,9 +56,11 @@ export function PhotoGallery({ obraId }: PhotoGalleryProps) {
   const { data: perfil } = usePerfil();
   const isAdmin = perfil?.role === 'admin';
 
+  const [isCapturing, setIsCapturing] = useState(false);
+
   // Motor offline e upload para instaladores (Campo)
   const {
-    capturePhoto,
+    capturePhotos,
     syncOfflinePhotos,
     pendingCount,
     localPreviews,
@@ -75,12 +77,17 @@ export function PhotoGallery({ obraId }: PhotoGalleryProps) {
   // Mutation para exclusão definitiva (Hard Delete)
   const deletePhotoMutation = useDeletePhoto();
 
-  // Captura foto da câmera nativa (Aba Registro)
+  // Captura fotos da câmera nativa ou da galeria (Aba Registro)
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await capturePhoto(file);
-    e.target.value = '';
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setIsCapturing(true);
+    try {
+      await capturePhotos(files);
+    } finally {
+      setIsCapturing(false);
+      e.target.value = '';
+    }
   };
 
   // Processa a exclusão confirmada no modal
@@ -384,22 +391,52 @@ export function PhotoGallery({ obraId }: PhotoGalleryProps) {
       {/* ========================================================================= */}
       {activeTab === 'registro' && (
         <div className="space-y-4">
-          {/* Botão de Câmera Nativa */}
-          <label htmlFor="camera-file-input" className="block w-full cursor-pointer">
-            <div className="w-full h-12 sm:h-14 rounded-xl bg-[#ffc61e] hover:bg-[#e5b010] text-black font-extrabold text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-lg border border-[#ffc61e]/50 active:scale-[0.99] transition-all">
-              <Camera className="w-5 h-5 stroke-[2.5]" />
-              <span>Tirar Foto com a Câmera</span>
-            </div>
-            <input
-              id="camera-file-input"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleFileChange}
-              className="hidden"
-              aria-label="Tirar ou selecionar foto da obra"
-            />
-          </label>
+          {/* Ações de Captura: Câmera Nativa + Galeria de Fotos */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {/* 1. Botão Câmera Nativa (iOS / Android Live Viewfinder) */}
+            <label htmlFor="camera-file-input" className="block w-full cursor-pointer">
+              <div className="w-full h-12 sm:h-14 rounded-xl bg-[#ffc61e] hover:bg-[#e5b010] text-black font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg border border-[#ffc61e]/50 active:scale-[0.99] transition-all">
+                {isCapturing ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Camera className="w-5 h-5 stroke-[2.5]" />
+                )}
+                <span>{isCapturing ? 'Processando Foto...' : 'Tirar Foto com a Câmera'}</span>
+              </div>
+              <input
+                id="camera-file-input"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                disabled={isCapturing}
+                onChange={handleFileChange}
+                className="hidden"
+                aria-label="Tirar foto com a câmera"
+              />
+            </label>
+
+            {/* 2. Botão Galeria de Fotos (Múltiplas Fotos do Celular) */}
+            <label htmlFor="gallery-file-input" className="block w-full cursor-pointer">
+              <div className="w-full h-12 sm:h-14 rounded-xl bg-zinc-950 hover:bg-zinc-850 text-zinc-100 hover:text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md border border-zinc-700 active:scale-[0.99] transition-all">
+                {isCapturing ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-[#ffc61e]" />
+                ) : (
+                  <ImageIcon className="w-5 h-5 text-[#ffc61e]" />
+                )}
+                <span>{isCapturing ? 'Processando...' : 'Escolher da Galeria (Várias)'}</span>
+              </div>
+              <input
+                id="gallery-file-input"
+                type="file"
+                accept="image/*"
+                multiple
+                disabled={isCapturing}
+                onChange={handleFileChange}
+                className="hidden"
+                aria-label="Selecionar fotos da galeria do celular"
+              />
+            </label>
+          </div>
 
           {/* Banner de Sincronização */}
           {pendingCount > 0 && (
